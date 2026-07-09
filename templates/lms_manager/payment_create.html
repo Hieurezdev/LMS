@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Ghi nhận đóng học phí{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row justify-content-center mt-3">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h4 class="fw-bold text-dark mb-4 text-center">Ghi nhận đóng học phí</h4>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" novalidate>
+                {% csrf_token %}
+                
+                {{ form|crispy }}
+                
+                <!-- Datalist for student name autocomplete -->
+                <datalist id="student-list">
+                    {% for s in existing_students %}
+                        <option value="{{ s.name }} (Lớp {{ s.classroom.name }})">
+                    {% endfor %}
+                </datalist>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'payment_list' %}" class="btn btn-outline-secondary px-4 rounded-3">
+                        <i class="fas fa-arrow-left me-2"></i>Quay lại
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4 rounded-3">
+                        <i class="fas fa-save me-2"></i>Lưu giao dịch
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const studentNameInput = document.getElementById("id_student_name");
+        const teacherSelect = document.getElementById("id_teacher");
+        const periodSelect = document.getElementById("id_payment_period");
+        const amountInput = document.getElementById("id_amount");
+
+        // Map containing existing students: Name -> ID
+        const studentsData = {
+            {% for s in existing_students %}
+            "{{ s.name|escapejs }}": "{{ s.id }}",
+            {% endfor %}
+        };
+
+        function getCleanStudentName(val) {
+            val = val.trim();
+            const match = val.match(/^(.+?)\s*\(\s*Lớp\s+(.+?)\s*\)$/i);
+            return match ? match[1].trim() : val;
+        }
+
+        // Add Quick helper buttons for amount input
+        if (amountInput) {
+            const quickContainer = document.createElement("div");
+            quickContainer.className = "mt-2 d-flex flex-wrap gap-2 align-items-center";
+            quickContainer.innerHTML = `
+                <span class="text-secondary small me-1" style="font-size: 11px;"><i class="fas fa-magic me-1 text-warning"></i>Chọn nhanh:</span>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="400000" style="font-size: 11px;">400k</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="450000" style="font-size: 11px;">450k</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="500000" style="font-size: 11px;">500k</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="550000" style="font-size: 11px;">550k</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="600000" style="font-size: 11px;">600k</button>
+            `;
+            amountInput.parentNode.insertBefore(quickContainer, amountInput.nextSibling);
+            
+            quickContainer.querySelectorAll(".quick-amount-btn").forEach(btn => {
+                btn.addEventListener("click", function() {
+                    amountInput.value = this.getAttribute("data-value");
+                });
+            });
+        }
+
+        if (periodSelect) {
+            function loadPaymentPeriods() {
+                let studentId = "";
+                if (studentNameInput) {
+                    const cleanName = getCleanStudentName(studentNameInput.value);
+                    studentId = studentsData[cleanName] || "";
+                }
+                
+                let teacherId = "";
+                if (teacherSelect) {
+                    teacherId = teacherSelect.value;
+                }
+
+                // Construct filtered URL
+                let url = "{% url 'api_payment_periods_filter' %}?student_id=" + studentId + "&teacher_id=" + teacherId;
+                const currentVal = periodSelect.value;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        let options = '<option value="">Chọn đợt đóng tiền</option>';
+                        data.periods.forEach(p => {
+                            let selected = (p.id == currentVal) ? 'selected' : '';
+                            options += `<option value="${p.id}" ${selected}>${p.name}</option>`;
+                        });
+                        periodSelect.innerHTML = options;
+                    })
+                    .catch(err => {
+                        console.error("Lỗi tải đợt đóng học phí:", err);
+                    });
+            }
+
+            function fetchPeriodDetails(periodId) {
+                if (!periodId) return;
+                fetch(`/api/payment-periods/${periodId}/details/`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (teacherSelect && data.teacher_id) {
+                            teacherSelect.value = data.teacher_id;
+                        }
+                        if (amountInput && (!amountInput.value || amountInput.value === "0" || amountInput.value === "")) {
+                            amountInput.value = data.amount;
+                        }
+                    })
+                    .catch(err => console.error("Lỗi lấy thông tin đợt đóng tiền:", err));
+            }
+
+            // Listen for user typing or teacher dropdown changes
+            if (studentNameInput) {
+                studentNameInput.addEventListener("input", loadPaymentPeriods);
+                studentNameInput.addEventListener("change", function() {
+                    const cleanName = getCleanStudentName(this.value);
+                    if (this.value !== cleanName) {
+                        this.value = cleanName;
+                        loadPaymentPeriods();
+                    }
+                });
+            }
+            if (teacherSelect) {
+                teacherSelect.addEventListener("change", loadPaymentPeriods);
+            }
+
+            periodSelect.addEventListener("change", function() {
+                fetchPeriodDetails(this.value);
+            });
+
+            // Execute initially
+            loadPaymentPeriods();
+            
+            // If already pre-filled (e.g. from query params), fetch details
+            if (periodSelect.value) {
+                fetchPeriodDetails(periodSelect.value);
+            }
+        }
+    });
+</script>
+{% endblock js %}

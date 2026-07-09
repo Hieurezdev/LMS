@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+
+{% block title %}Danh sách học sinh{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Học sinh</h1>
+      <p>Tra cứu học sinh, môn học và tình trạng đóng học phí</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'student_add' %}" class="btn btn-primary">
+        <i class="fas fa-user-plus"></i> Thêm học sinh
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Search filters -->
+  <div class="card p-3 mb-4" style="border-radius:12px;">
+    <form method="GET" action="{% url 'student_list' %}" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5">
+        <label class="form-label" for="searchName">Tên học sinh</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:#F8FAFC;border-right:none;font-size:13px;">
+            <i class="fas fa-search" style="color:#94A3B8;"></i>
+          </span>
+          <input type="text" name="name" id="searchName" class="form-control" style="border-left:none;"
+                 placeholder="Tìm theo tên học sinh..." value="{{ search_name }}">
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="filterClass">Lọc theo lớp</label>
+        <select name="classroom_id" id="filterClass" class="form-select">
+          <option value="">-- Tất cả lớp --</option>
+          {% for cls in classrooms %}
+          <option value="{{ cls.id }}" {% if selected_classroom_id == cls.id|stringformat:"s" %}selected{% endif %}>{{ cls.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="fas fa-filter"></i> Lọc
+        </button>
+        {% if search_name or selected_classroom_id %}
+        <a href="{% url 'student_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-times"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Student table -->
+  <div class="table-card mb-5">
+    <div class="table-card-header">
+      <div class="table-card-title">
+        <i class="fas fa-users"></i>
+        Danh sách học sinh
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ students|length }} học sinh</span>
+        <button onclick="exportToCSV()" class="btn btn-outline-success btn-sm">
+          <i class="fas fa-file-excel"></i> Xuất Excel
+        </button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="lms-table" id="student-excel-table">
+        <thead>
+          <tr>
+            <th>Học sinh</th>
+            <th>Lớp</th>
+            <th>Môn học & Giảng viên</th>
+            <th class="no-export" style="text-align:right;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in students %}
+          <tr>
+            <td>
+              <a href="{% url 'student_detail' s.id %}" class="fw-semibold" style="color:#0F172A;text-decoration:none;">
+                <div style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#EEF1FE;color:#4F6EF7;font-size:12px;font-weight:700;margin-right:8px;vertical-align:middle;">
+                  {{ s.name|first|upper }}
+                </div>
+                {{ s.name }}
+              </a>
+              {% if s.phone %}
+              <div style="font-size:11.5px;color:#64748B;margin-top:2px;margin-left:38px;">
+                <i class="fas fa-phone-alt" style="font-size:10px;color:#94A3B8;margin-right:2px;"></i> {{ s.phone }}
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{% url 'classroom_detail' s.classroom.id %}" style="text-decoration:none;">
+                <span class="badge" style="background:#F1F5F9;color:#475569;font-size:12px;padding:4px 10px;">
+                  {{ s.classroom.name }}
+                </span>
+              </a>
+            </td>
+            <td>
+              {% for e in s.enrollments.all %}
+              <div style="font-size:13px;color:#475569;margin-bottom:2px;">
+                <i class="fas fa-book" style="color:#06B6D4;font-size:10px;"></i>
+                {{ e.subject.name }}
+                <span style="color:#94A3B8;">({{ e.teacher.name }})</span>
+              </div>
+              {% empty %}
+              <span style="color:#94A3B8;font-size:13px;">Chưa đăng ký môn nào</span>
+              {% endfor %}
+            </td>
+            <td style="text-align:right;" class="no-export">
+              <div class="d-flex justify-content-end gap-1">
+                <a href="{% url 'student_detail' s.id %}" class="btn btn-outline-primary btn-xs" title="Chi tiết">
+                  <i class="fas fa-eye"></i>
+                </a>
+                <a href="{% url 'student_register' s.id %}" class="btn btn-outline-success btn-xs" title="Đăng ký học">
+                  <i class="fas fa-user-plus"></i>
+                </a>
+                <a href="{% url 'student_edit' s.id %}" class="btn btn-outline-secondary btn-xs" title="Sửa">
+                  <i class="fas fa-edit"></i>
+                </a>
+                <a href="{% url 'student_delete' s.id %}" class="btn btn-outline-danger btn-xs"
+                   onclick="return confirm('Xóa học sinh này cùng toàn bộ dữ liệu liên quan?');" title="Xóa">
+                  <i class="fas fa-trash-alt"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="text-center py-5" style="color:#94A3B8;">
+              <i class="fas fa-search fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+              Không tìm thấy học sinh phù hợp
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+  function exportToCSV() {
+    const csv = [];
+    const rows = document.querySelectorAll("#student-excel-table tr");
+    for (let i = 0; i < rows.length; i++) {
+      const row = [];
+      const cols = rows[i].querySelectorAll("td:not(.no-export), th:not(.no-export)");
+      for (let j = 0; j < cols.length; j++) {
+        let text = cols[j].innerText.trim().replace(/"/g, '""');
+        row.push('"' + text + '"');
+      }
+      csv.push(row.join(","));
+    }
+    const csvContent = "\ufeff" + csv.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", "Danh_sach_hoc_sinh.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+</script>
+{% endblock js %}

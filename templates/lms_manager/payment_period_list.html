@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Đợt đóng tiền{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Đợt đóng tiền</h1>
+      <p>Định nghĩa các đợt nộp học phí theo giảng viên và môn học</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'payment_period_add' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Thêm đợt mới
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <div class="table-card-title">
+        <i class="fas fa-calendar-alt"></i>
+        Danh sách đợt đóng tiền
+      </div>
+      <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:13px;padding:5px 12px;">{{ periods|length }} đợt</span>
+    </div>
+    <div class="table-responsive">
+      <table class="lms-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tên đợt đóng tiền</th>
+            <th>Môn học</th>
+            <th>Giảng viên</th>
+            <th style="text-align:right;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in periods %}
+          <tr>
+            <td style="color:#94A3B8;font-size:12px;">{{ p.id }}</td>
+            <td class="fw-semibold">{{ p.name }}</td>
+            <td>
+              <span class="badge" style="background:#CFFAFE;color:#0C4A6E;">{{ p.subject.name }}</span>
+            </td>
+            <td>
+              {% if p.teacher %}
+              <a href="{% url 'teacher_detail' p.teacher.id %}" style="color:#0F172A;font-weight:500;text-decoration:none;">
+                <i class="fas fa-chalkboard-teacher" style="color:#4F6EF7;font-size:11px;"></i>
+                {{ p.teacher.name }}
+              </a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td style="text-align:right;">
+              <a href="{% url 'payment_period_edit' p.id %}" class="btn btn-outline-primary btn-sm me-1">
+                <i class="fas fa-edit"></i> Sửa
+              </a>
+              <a href="{% url 'payment_period_delete' p.id %}" class="btn btn-outline-danger btn-sm"
+                 onclick="return confirm('Xóa đợt đóng tiền này? Các giao dịch đã liên kết có thể bị ảnh hưởng.');">
+                <i class="fas fa-trash"></i> Xóa
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center py-5" style="color:#94A3B8;">
+              <i class="fas fa-inbox fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+              Chưa có đợt đóng tiền nào. Hãy tạo mới từ trang giảng viên!
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock content %}

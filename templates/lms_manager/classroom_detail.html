@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+
+{% block title %}Báo cáo đợt đóng tiền | {{ classroom.name }}{% endblock title %}
+
+{% block header %}
+<style>
+    /* Excel Grid Style */
+    .excel-container {
+        font-size: 13.5px;
+        background-color: #ffffff;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .excel-table-header {
+        background-color: #f3f3f3;
+        border-bottom: 2px solid #c0c0c0;
+        padding: 10px 15px;
+        font-weight: 600;
+        color: #333;
+    }
+    .excel-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+    }
+    .excel-table th {
+        background-color: #e9e9e9;
+        color: #333333;
+        font-weight: 500;
+        border: 1px solid #d0d0d0;
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 13px;
+        user-select: none;
+    }
+    .excel-table td {
+        border: 1px solid #e0e0e0;
+        padding: 8px 12px;
+        color: #2b2b2b;
+    }
+    .excel-table tr:nth-child(even) {
+        background-color: #fdfdfd;
+    }
+    .excel-table tr:hover {
+        background-color: #f2f7fa;
+    }
+    .excel-total-row {
+        background-color: #f1f8e9 !important;
+        font-weight: bold;
+        border-top: 2px solid #81c784;
+    }
+    .excel-total-row td {
+        border-top: 2px solid #81c784;
+        border-bottom: 2px double #81c784;
+    }
+    .status-badge {
+        font-size: 11.5px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    .status-paid {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        border: 1px solid #c8e6c9;
+    }
+    .status-unpaid {
+        background-color: #ffebee;
+        color: #c62828;
+        border: 1px solid #ffcdd2;
+    }
+    
+    /* Dynamic pill button custom styles */
+    .nav-pills .nav-link {
+        color: #555;
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        transition: all 0.2s;
+    }
+    .nav-pills .nav-link.active {
+        background-color: #198754 !important;
+        color: white !important;
+        border-color: #198754 !important;
+        box-shadow: 0 4px 10px rgba(25, 135, 84, 0.2);
+    }
+</style>
+{% endblock header %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row mt-2 mb-3">
+    <div class="col-12 col-md-8">
+        <h3 class="text-dark fw-bold mb-1">Lớp: {{ classroom.name }}</h3>
+        <p class="text-secondary small">Quản lý đóng tiền và nợ phí chi tiết theo từng đợt đóng tiền của từng môn học</p>
+    </div>
+    <div class="col-12 col-md-4 d-flex flex-wrap gap-2 justify-content-md-end justify-content-start align-self-center mt-2 mt-md-0">
+        <a href="{% url 'classroom_edit' classroom.id %}" class="btn btn-outline-primary rounded-3 px-3">
+            <i class="fas fa-edit me-2"></i>Sửa tên lớp
+        </a>
+        <a href="{% url 'classroom_list' %}" class="btn btn-outline-secondary rounded-3 px-3">
+            <i class="fas fa-arrow-left me-2"></i>Quay lại danh sách
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Thống kê tổng quát -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-light">
+            <div class="row text-center">
+                <div class="col-6 border-end">
+                    <h6 class="text-muted small mb-1">Sĩ số lớp</h6>
+                    <h4 class="fw-bold mb-0 text-dark">{{ students.count }} học sinh</h4>
+                </div>
+                <div class="col-6">
+                    <h6 class="text-muted small mb-1">Tổng cộng đã thu tất cả các đợt</h6>
+                    <h4 class="fw-bold mb-0 text-success">{{ total_paid_all|floatformat:0 }} VNĐ</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sidebar: Danh sách học sinh -->
+    <div class="col-12 col-lg-3">
+        <div class="card border-0 shadow-sm rounded-4 p-4 mb-4">
+            <h5 class="fw-bold mb-3 text-dark"><i class="fas fa-users me-2"></i>Học sinh & Môn học</h5>
+            <ul class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+                {% for s in student_reports %}
+                    <li class="list-group-item px-0 py-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <a href="{% url 'student_detail' s.student.id %}" class="text-decoration-none fw-bold text-primary">
+                                <i class="far fa-user me-2"></i>{{ s.student.name }}
+                            </a>
+                            <a href="{% url 'student_register' s.student.id %}" class="btn btn-xs btn-light text-primary rounded-pill px-2">Đăng ký</a>
+                        </div>
+                        <div class="ps-3">
+                            {% for e in s.enrollments %}
+                                <span class="badge bg-light text-dark border rounded-pill px-2.5 py-1.5 me-1 mb-1" style="font-size: 11px; display: inline-block;">
+                                    {{ e.subject.name }} <span class="text-secondary" style="font-size: 10px;">({{ e.teacher.name }})</span>
+                                </span>
+                            {% empty %}
+                                <span class="text-muted small">Chưa đăng ký môn nào</span>
+                            {% endfor %}
+                        </div>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-muted text-center px-0 py-4">Chưa có học sinh nào</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <!-- Reports Section with Button Tabs -->
+    <div class="col-12 col-lg-9">
+        {% if not period_reports %}
+            <!-- Warning alert if no periods set -->
+            <div class="alert alert-warning rounded-4 border-0 shadow-sm p-5 text-center">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                <h5 class="fw-bold text-dark">Chưa có đợt đóng tiền nào được thiết lập!</h5>
+                <p class="text-secondary small mb-4">Hãy thêm đợt đóng tiền riêng cho từng môn học và giảng viên của lớp học này để bắt đầu theo dõi học phí.</p>
+                <a href="{% url 'payment_period_add' %}?classroom={{ classroom.id }}" class="btn btn-primary rounded-3 px-4 py-2">
+                    <i class="fas fa-plus me-2"></i>Tạo Đợt đóng tiền đầu tiên
+                </a>
+            </div>
+        {% else %}
+            <!-- Tab selector buttons -->
+            <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
+                <span class="fw-bold text-secondary me-2"><i class="fas fa-filter me-1"></i>Chọn đợt đóng:</span>
+                <ul class="nav nav-pills gap-2" id="pills-tab" role="tablist">
+                    {% for report in period_reports %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {% if forloop.first %}active{% endif %} rounded-3 px-3 py-2 fw-semibold" 
+                                    id="pills-tab-{{ forloop.counter }}" 
+                                    data-bs-toggle="pill" 
+                                    data-bs-target="#pills-period-{{ forloop.counter }}" 
+                                    type="button" 
+                                    role="tab" 
+                                    aria-controls="pills-period-{{ forloop.counter }}" 
+                                    aria-selected="{% if forloop.first %}true{% endif %}">
+                                {{ report.simple_name }} - {{ report.subject_name }}
+                            </button>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Tab contents (Excel grids) -->
+            <div class="tab-content" id="pills-tabContent">
+                {% for report in period_reports %}
+                    <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" 
+                         id="pills-period-{{ forloop.counter }}" 
+                         role="tabpanel" 
+                         aria-labelledby="pills-tab-{{ forloop.counter }}">
+                         
+                        <div class="excel-container shadow-sm">
+                            <div class="excel-table-header d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-calendar-check me-2 text-success"></i>
+                                    <span class="text-uppercase fw-bold text-dark">BẢNG KÊ {{ report.period_name }}</span>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button onclick="exportPeriodToCSV('{{ report.period_name }}', 'table-{{ forloop.counter }}')" class="btn btn-sm btn-outline-success rounded-3">
+                                        <i class="fas fa-file-excel me-1"></i> Xuất Excel đợt này
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="excel-table" id="table-{{ forloop.counter }}">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">Học sinh</th>
+                                            <th style="width: 20%;">Môn học</th>
+                                            <th style="width: 20%;">Giảng viên</th>
+                                            <th style="width: 15%;">Trạng thái</th>
+                                            <th style="width: 20%; text-align: right;">Số tiền</th>
+                                            <th style="width: 15%; text-align: center;">Ngày đóng</th>
+                                            <th style="width: 15%; text-align: right;" class="no-export">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for r in report.records %}
+                                            <tr>
+                                                <td class="fw-semibold text-dark">
+                                                    <a href="{% url 'student_detail' r.student.id %}" class="text-decoration-none text-primary">
+                                                        {{ r.student.name }}
+                                                    </a>
+                                                </td>
+                                                <td>{{ r.subject.name }}</td>
+                                                <td>{{ r.teacher.name }}</td>
+                                                <td>
+                                                    {% if r.status == "Đã đóng" %}
+                                                        <span class="status-badge status-paid"><i class="fas fa-check-circle me-1"></i>Đã đóng</span>
+                                                    {% else %}
+                                                        <span class="status-badge status-unpaid"><i class="fas fa-times-circle me-1"></i>Chưa đóng</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td style="text-align: right;" class="fw-semibold {% if r.status == 'Đã đóng' %}text-success{% else %}text-muted{% endif %}">
+                                                    {% if r.status == "Đã đóng" %}{{ r.amount|floatformat:0 }} VNĐ{% else %}-{% endif %}
+                                                </td>
+                                                <td style="text-align: center;" class="text-secondary small">
+                                                    {% if r.date %}{{ r.date|date:"d/m/Y" }}{% else %}-{% endif %}
+                                                </td>
+                                                <td style="text-align: right;" class="no-export">
+                                                    {% if r.status == "Đã đóng" %}
+                                                        <div class="d-flex justify-content-end gap-1">
+                                                            {% if r.payment.receipt_pdf %}
+                                                            <a href="{{ r.payment.receipt_pdf.url }}" class="btn btn-xs btn-outline-success rounded-3 py-0.5 px-2" target="_blank" title="Tải PDF biên lai">
+                                                                <i class="fas fa-file-pdf"></i>
+                                                            </a>
+                                                            {% endif %}
+                                                            <a href="{% url 'payment_receipt' r.payment_id %}" class="btn btn-xs btn-outline-info rounded-3 py-0.5 px-2" target="_blank" title="In biên lai">
+                                                                <i class="fas fa-print"></i>
+                                                            </a>
+                                                            <a href="{% url 'payment_delete' r.payment_id %}" class="btn btn-xs btn-outline-danger rounded-3 py-0.5 px-2" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
+                                                                <i class="fas fa-trash-alt"></i>
+                                                            </a>
+                                                        </div>
+                                                    {% else %}
+                                                        <a href="{% url 'payment_add' %}?student={{ r.student.id }}&period={{ report.period_id }}" class="btn btn-xs btn-success rounded-3 py-0.5 px-2">
+                                                            <i class="fas fa-plus me-1"></i>Thu học phí
+                                                        </a>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="7" class="text-center text-muted py-4">Chưa có học sinh nào đăng ký môn học này</td>
+                                            </tr>
+                                        {% endfor %}
+                                        
+                                        <!-- Sum row -->
+                                        <tr class="excel-total-row">
+                                            <td colspan="4">TỔNG ĐÃ THU</td>
+                                            <td style="text-align: right;" class="text-success">{{ report.total_paid|floatformat:0 }} VNĐ</td>
+                                            <td colspan="2"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+    function exportPeriodToCSV(periodName, tableId) {
+        const csv = [];
+        const rows = document.querySelectorAll("#" + tableId + " tr");
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [];
+            const cols = rows[i].querySelectorAll("td:not(.no-export), th:not(.no-export)");
+            
+            for (let j = 0; j < cols.length; j++) {
+                let text = cols[j].innerText.trim();
+                text = text.replace(/"/g, '""');
+                row.push('"' + text + '"');
+            }
+            csv.push(row.join(","));
+        }
+
+        const filename = "Bao_cao_" + periodName.replace(/\s+/g, '_') + "_lop_{{ classroom.name }}.csv";
+
+        // Prepend UTF-8 BOM so Excel displays Vietnamese correctly
+        const csvContent = "\ufeff" + csv.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+</script>
+{% endblock js %}

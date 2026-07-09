@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Thêm học sinh mới{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row justify-content-center mt-3">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h4 class="fw-bold text-dark mb-4 text-center">Thêm học sinh mới</h4>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="POST" novalidate>
+                {% csrf_token %}
+                
+                {{ form|crispy }}
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'student_list' %}" class="btn btn-outline-secondary px-4 rounded-3">
+                        <i class="fas fa-arrow-left me-2"></i>Quay lại
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4 rounded-3">
+                        <i class="fas fa-save me-2"></i>Lưu học sinh
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const subjectSelect = document.getElementById("id_subject");
+        const teacherSelect = document.getElementById("id_teacher");
+
+        if (subjectSelect && teacherSelect) {
+            function loadTeachers() {
+                const subjectId = subjectSelect.value;
+                if (!subjectId) {
+                    teacherSelect.innerHTML = '<option value="">Chọn giảng viên dạy (Tùy chọn)</option>';
+                    return;
+                }
+
+                let urlPattern = "{% url 'api_subject_teachers' subject_id=999999 %}";
+                let url = urlPattern.replace("999999", subjectId);
+                const currentVal = teacherSelect.value;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        let options = '<option value="">Chọn giảng viên dạy (Tùy chọn)</option>';
+                        data.teachers.forEach(t => {
+                            let selected = (t.id == currentVal) ? 'selected' : '';
+                            options += `<option value="${t.id}" ${selected}>${t.name}</option>`;
+                        });
+                        teacherSelect.innerHTML = options;
+                    })
+                    .catch(err => {
+                        console.error("Lỗi tải giảng viên:", err);
+                    });
+            }
+
+            // Listen for changes on subject choice
+            subjectSelect.addEventListener("change", loadTeachers);
+
+            // Execute initially if value exists (e.g. form validation error)
+            if (subjectSelect.value) {
+                loadTeachers();
+            }
+        }
+    });
+</script>
+{% endblock js %}

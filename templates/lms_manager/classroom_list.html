@@ -1,0 +1,168 @@
+{% extends 'base.html' %}
+
+{% block title %}Quản lý Lớp học{% endblock title %}
+
+{% block header %}
+<style>
+    /* Excel Grid Style */
+    .excel-container {
+        font-size: 13.5px;
+        background-color: #ffffff;
+        border: 1px solid #d0d0d0;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+    .excel-table-header {
+        background-color: #f3f3f3;
+        border-bottom: 2px solid #c0c0c0;
+        padding: 10px 15px;
+        font-weight: 600;
+        color: #333;
+    }
+    .excel-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0;
+    }
+    .excel-table th {
+        background-color: #e9e9e9;
+        color: #333333;
+        font-weight: 500;
+        border: 1px solid #d0d0d0;
+        padding: 8px 12px;
+        text-align: left;
+        font-size: 13px;
+        user-select: none;
+    }
+    .excel-table td {
+        border: 1px solid #e0e0e0;
+        padding: 8px 12px;
+        color: #2b2b2b;
+    }
+    .excel-table tr:nth-child(even) {
+        background-color: #fdfdfd;
+    }
+    .excel-table tr:hover {
+        background-color: #f2f7fa;
+    }
+</style>
+{% endblock header %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row mt-2 mb-3 g-2 align-items-center">
+    <div class="col-12 col-md-8">
+        <h3 class="text-dark fw-bold mb-1">Quản lý Lớp học</h3>
+        <p class="text-secondary small mb-0">Danh sách các lớp học hiện có trong hệ thống</p>
+    </div>
+    <div class="col-12 col-md-4 text-md-end text-start mt-2 mt-md-0">
+        <a href="{% url 'classroom_add' %}" class="btn btn-primary rounded-3 px-3">
+            <i class="fas fa-plus me-2"></i>Thêm Lớp
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="excel-container shadow-sm mb-4">
+    <div class="excel-table-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <i class="fas fa-school me-2 text-success"></i>
+            <span class="text-uppercase fw-bold text-dark">BẢNG DANH SÁCH LỚP HỌC</span>
+        </div>
+        <button onclick="exportToCSV()" class="btn btn-sm btn-outline-success rounded-3">
+            <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
+        </button>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="excel-table" id="classroom-excel-table">
+            <thead>
+                <tr>
+                    <th style="width: 10%;">Mã Lớp (ID)</th>
+                    <th style="width: 30%;">Tên Lớp học</th>
+                    <th style="width: 15%; text-align: center;">Sĩ số học sinh</th>
+                    <th style="width: 15%; text-align: center;">Số môn học</th>
+                    <th style="width: 20%; text-align: right;">Tổng học phí đã thu</th>
+                    <th style="width: 10%; text-align: right;" class="no-export">Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in class_reports %}
+                    <tr>
+                        <td>{{ item.classroom.id }}</td>
+                        <td class="fw-semibold text-dark">
+                            <a href="{% url 'classroom_detail' item.classroom.id %}" class="text-decoration-none text-primary">
+                                <i class="fas fa-school me-2 text-secondary"></i>{{ item.classroom.name }}
+                            </a>
+                        </td>
+                        <td style="text-align: center;">{{ item.student_count }} học sinh</td>
+                        <td style="text-align: center;">{{ item.subject_count }} môn</td>
+                        <td style="text-align: right;" class="fw-bold text-success">
+                            {{ item.revenue|floatformat:0 }} VNĐ
+                        </td>
+                        <td style="text-align: right;" class="no-export">
+                            <div class="d-flex justify-content-end gap-1">
+                                <a href="{% url 'classroom_edit' item.classroom.id %}" class="btn btn-xs btn-outline-primary rounded-3 py-0.5 px-2" title="Sửa">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'classroom_delete' item.classroom.id %}" class="btn btn-xs btn-outline-danger rounded-3 py-0.5 px-2" onclick="return confirm('Bạn có chắc chắn muốn xóa lớp học này không?');" title="Xóa">
+                                    <i class="fas fa-trash-alt"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">Chưa có lớp học nào được đăng ký</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+    function exportToCSV() {
+        const csv = [];
+        const rows = document.querySelectorAll("#classroom-excel-table tr");
+        
+        for (let i = 0; i < rows.length; i++) {
+            const row = [];
+            const cols = rows[i].querySelectorAll("td:not(.no-export), th:not(.no-export)");
+            
+            for (let j = 0; j < cols.length; j++) {
+                let text = cols[j].innerText.trim();
+                text = text.replace(/"/g, '""');
+                row.push('"' + text + '"');
+            }
+            csv.push(row.join(","));
+        }
+
+        const filename = "Danh_sach_lop_hoc.csv";
+        const csvContent = "\ufeff" + csv.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        
+        const link = document.createElement("a");
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", filename);
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+</script>
+{% endblock js %}

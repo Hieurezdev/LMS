@@ -1,0 +1,122 @@
+{% load static %}
+{% load i18n %}
+
+<div id="side-nav">
+
+  <!-- Brand -->
+  <a href="{% url 'home' %}" class="sidebar-brand">
+    <img src="{% static 'img/dj-lms.png' %}" alt="LMS Logo">
+    <div class="sidebar-brand-text">
+      Quản lý học phí
+      <small>Trung tâm gia sư</small>
+    </div>
+  </a>
+
+  <!-- Nav -->
+  <div class="sidebar-nav mt-2" style="flex:1">
+
+    <div class="sidebar-section-label">Tổng quan</div>
+    <ul>
+      <li class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+        <a href="{% url 'home' %}">
+          <span class="nav-icon"><i class="fas fa-tachometer-alt"></i></span>
+          <span>Dashboard</span>
+        </a>
+      </li>
+      <li class="{% if 'cong-no' in request.path %}active{% endif %}">
+        <a href="{% url 'debt_dashboard' %}">
+          <span class="nav-icon"><i class="fas fa-exclamation-circle"></i></span>
+          <span>Công nợ học phí</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-section-label">Quản lý</div>
+    <ul>
+      <li class="{% if 'classes' in request.path %}active{% endif %}">
+        <a href="{% url 'classroom_list' %}">
+          <span class="nav-icon"><i class="fas fa-school"></i></span>
+          <span>Lớp học</span>
+        </a>
+      </li>
+      <li class="{% if 'subjects' in request.path %}active{% endif %}">
+        <a href="{% url 'subject_list' %}">
+          <span class="nav-icon"><i class="fas fa-book-open"></i></span>
+          <span>Môn học</span>
+        </a>
+      </li>
+      <li class="{% if 'teachers' in request.path %}active{% endif %}">
+        <a href="{% url 'teacher_list' %}">
+          <span class="nav-icon"><i class="fas fa-chalkboard-teacher"></i></span>
+          <span>Giảng viên</span>
+        </a>
+      </li>
+      <li class="{% if 'students' in request.path %}active{% endif %}">
+        <a href="{% url 'student_list' %}">
+          <span class="nav-icon"><i class="fas fa-user-graduate"></i></span>
+          <span>Học sinh</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-section-label">Học phí</div>
+    <ul>
+      <li class="{% if 'periods' in request.path %}active{% endif %}">
+        <a href="{% url 'payment_period_list' %}">
+          <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span>
+          <span>Đợt đóng tiền</span>
+        </a>
+      </li>
+      <li class="{% if request.resolver_match.url_name == 'payment_list' or request.resolver_match.url_name == 'payment_receipt' %}active{% endif %}">
+        <a href="{% url 'payment_list' %}">
+          <span class="nav-icon"><i class="fas fa-wallet"></i></span>
+          <span>Giao dịch</span>
+        </a>
+      </li>
+      <li>
+        <a href="{% url 'payment_add' %}">
+          <span class="nav-icon"><i class="fas fa-plus-circle"></i></span>
+          <span>Thu học phí</span>
+        </a>
+      </li>
+    </ul>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <div class="user-avatar">
+        {{ request.user.username|first|upper|default:"A" }}
+      </div>
+      <div>
+        <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
+        <div class="user-role">{{ request.user.get_user_role|default:"Quản trị viên" }}</div>
+      </div>
+    </div>
+
+    <form action="{% url 'set_language' %}" method="post" id="lang-form" class="mt-2">
+      {% csrf_token %}
+      <input name="next" type="hidden" value="{{ redirect_to }}">
+      <select class="form-select form-select-sm" name="language" id="lang-select" style="background:#1E293B;color:#94A3B8;border-color:#334155;font-size:12px;">
+        {% get_current_language as LANGUAGE_CODE %}
+        {% get_available_languages as LANGUAGES %}
+        {% get_language_info_list for LANGUAGES as languages %}
+        {% for language in languages %}
+          <option value="{{ language.code }}"{% if language.code == LANGUAGE_CODE %} selected{% endif %}>
+            {{ language.name_local }} ({{ language.code }})
+          </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+</div>
+
+{% block js %}
+<script>
+  document.getElementById("lang-select").addEventListener("change", function() {
+    document.getElementById("lang-form").submit();
+  });
+</script>
+{% endblock js %}

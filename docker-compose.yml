@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: django_lms_db
+    environment:
+      - POSTGRES_DB=django_lms
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    container_name: django_lms_web
+    command: >
+      sh -c "uv run python manage.py migrate &&
+             uv run python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+      - /app/.venv
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_NAME=django_lms
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DEBUG=True
+      - SECRET_KEY=o!ld8nrt4vc*h1zoey*wj48x*q0#ss12h=+zh)kk^6b3aygg=!
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

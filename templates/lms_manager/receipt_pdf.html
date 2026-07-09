@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Biên lai thu tiền - {{ payment.student.name }}</title>
+    <style>
+        @page {
+            size: a4 portrait;
+            margin: 2cm;
+        }
+        @font-face {
+            font-family: 'Roboto';
+            src: url('/static/fonts/roboto/Roboto-Regular.ttf');
+        }
+        @font-face {
+            font-family: 'Roboto';
+            src: url('/static/fonts/roboto/Roboto-Bold.ttf');
+            font-weight: bold;
+        }
+        body {
+            font-family: 'Roboto', sans-serif;
+            color: #333333;
+            line-height: 1.5;
+            font-size: 13px;
+        }
+        .container {
+            width: 100%;
+        }
+        .header-table {
+            width: 100%;
+            margin-bottom: 30px;
+            border-bottom: 2px dashed #dee2e6;
+            padding-bottom: 15px;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #0d6efd;
+            margin: 0 0 5px 0;
+        }
+        .subtitle {
+            font-size: 11px;
+            color: #6c757d;
+            margin: 0;
+        }
+        .badge {
+            background-color: #d1e7dd;
+            color: #0f5132;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 20px;
+            text-align: center;
+        }
+        .receipt-no {
+            font-size: 11px;
+            color: #6c757d;
+            margin: 5px 0 0 0;
+        }
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #495057;
+            text-transform: uppercase;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+        }
+        .details-table {
+            width: 100%;
+            margin-bottom: 30px;
+            border-collapse: collapse;
+        }
+        .details-table th {
+            text-align: left;
+            padding: 8px 0;
+            color: #6c757d;
+            font-weight: normal;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .details-table td {
+            text-align: right;
+            padding: 8px 0;
+            color: #212529;
+            font-weight: bold;
+            border-bottom: 1px solid #f1f3f5;
+        }
+        .total-box {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 40px;
+        }
+        .total-table {
+            width: 100%;
+        }
+        .total-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #212529;
+        }
+        .total-amount {
+            font-size: 18px;
+            font-weight: bold;
+            color: #198754;
+            text-align: right;
+        }
+        .signature-table {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .signature-col {
+            width: 50%;
+            text-align: center;
+        }
+        .signature-title {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 60px;
+        }
+        .signature-sub {
+            font-size: 11px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <table class="header-table">
+        <tr>
+            <td style="vertical-align: middle;">
+                <div class="title">BIÊN LAI THU TIỀN</div>
+                <div class="subtitle">Hệ thống Quản lý Học sinh & Giảng viên</div>
+            </td>
+            <td style="text-align: right; vertical-align: middle;">
+                <span class="badge">ĐÃ THANH TOÁN</span>
+                <div class="receipt-no">Số: BL-{{ payment.id|stringformat:"06d" }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="section-title">Thông tin chi tiết</div>
+
+    <table class="details-table">
+        <tr>
+            <th>Tên học sinh</th>
+            <td>{{ payment.student.name }}</td>
+        </tr>
+        <tr>
+            <th>Lớp học</th>
+            <td>{{ payment.classroom.name }}</td>
+        </tr>
+        <tr>
+            <th>Môn học</th>
+            <td>{{ payment.subject.name }}</td>
+        </tr>
+        <tr>
+            <th>Giảng viên phụ trách</th>
+            <td>{{ payment.teacher.name }}</td>
+        </tr>
+        <tr>
+            <th>Đợt đóng tiền</th>
+            <td>{{ payment.payment_period.name }}</td>
+        </tr>
+        <tr>
+            <th>Ngày thanh toán</th>
+            <td>{{ payment.payment_date|date:"d/m/Y" }}</td>
+        </tr>
+    </table>
+
+    <div class="total-box">
+        <table class="total-table">
+            <tr>
+                <td class="total-label">SỐ TIỀN ĐÃ ĐÓNG:</td>
+                <td class="total-amount">{{ payment.amount|floatformat:0 }} VNĐ</td>
+            </tr>
+        </table>
+    </div>
+
+    <table class="signature-table">
+        <tr>
+            <td class="signature-col">
+                <div class="signature-title">Người nộp tiền</div>
+                <div class="signature-sub">(Ký và ghi rõ họ tên)</div>
+            </td>
+            <td class="signature-col">
+                <div class="signature-title">Người thu tiền</div>
+                <div class="signature-sub">(Ký và ghi rõ họ tên)</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ title }}{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row justify-content-center mt-3">
+    <div class="col-12 col-md-8 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h4 class="fw-bold text-dark mb-4 text-center">{{ title }}</h4>
+            
+            <form method="POST" novalidate>
+                {% csrf_token %}
+                
+                {{ form|crispy }}
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="javascript:history.back()" class="btn btn-outline-secondary px-4 rounded-3">
+                        <i class="fas fa-arrow-left me-2"></i>Quay lại
+                    </a>
+                    <button type="submit" class="btn btn-primary px-4 rounded-3">
+                        <i class="fas fa-save me-2"></i>Lưu thông tin
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}

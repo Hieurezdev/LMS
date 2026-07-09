@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Giảng viên{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Giảng viên</h1>
+      <p>Danh sách giảng viên và phân công giảng dạy</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'teacher_add' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Thêm giảng viên
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="row g-3">
+    {% for t in teachers %}
+    <div class="col-12 col-md-6 col-xl-4">
+      <div class="card p-4" style="transition:all 0.2s;border-radius:14px;">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#22C55E,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;font-weight:800;flex-shrink:0;">
+            {{ t.name|first|upper }}
+          </div>
+          <div>
+            <a href="{% url 'teacher_detail' t.id %}" class="fw-bold" style="font-size:16px;color:#0F172A;text-decoration:none;">
+              {{ t.name }}
+            </a>
+            {% if t.phone %}
+            <div style="font-size:12px;color:#64748B;margin-top:2.5px;">
+              <i class="fas fa-phone-alt" style="font-size:10.5px;color:#94A3B8;margin-right:2px;"></i> {{ t.phone }}
+            </div>
+            {% else %}
+            <div style="font-size:12px;color:#94A3B8;">Giảng viên</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Subjects -->
+        <div class="mb-2">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#94A3B8;margin-bottom:5px;">Môn giảng dạy</div>
+          <div class="d-flex flex-wrap gap-1">
+            {% for s in t.subjects.all %}
+            <span class="badge" style="background:#CFFAFE;color:#0C4A6E;font-size:12px;padding:4px 10px;">{{ s.name }}</span>
+            {% empty %}
+            <span style="font-size:13px;color:#94A3B8;">Chưa phân môn</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Classes -->
+        <div class="mb-3">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#94A3B8;margin-bottom:5px;">Lớp giảng dạy</div>
+          <div class="d-flex flex-wrap gap-1">
+            {% for c in t.classes.all %}
+            <a href="{% url 'classroom_detail' c.id %}" style="text-decoration:none;">
+              <span class="badge" style="background:#F1F5F9;color:#475569;font-size:12px;padding:4px 10px;">{{ c.name }}</span>
+            </a>
+            {% empty %}
+            <span style="font-size:13px;color:#94A3B8;">Chưa phân lớp</span>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex gap-2 mt-auto pt-2" style="border-top:1px solid #F1F5F9;">
+          <a href="{% url 'teacher_detail' t.id %}" class="btn btn-primary btn-sm flex-grow-1">
+            <i class="fas fa-eye"></i> Chi tiết
+          </a>
+          <a href="{% url 'teacher_edit' t.id %}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-edit"></i>
+          </a>
+          <a href="{% url 'teacher_delete' t.id %}" class="btn btn-outline-danger btn-sm"
+             onclick="return confirm('Xóa giảng viên này?');">
+            <i class="fas fa-trash"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+      <div class="card p-5 text-center" style="border:2px dashed #E2E8F0 !important;background:#FAFBFF !important;">
+        <i class="fas fa-chalkboard-teacher fa-3x mb-3" style="color:#CBD5E1;"></i>
+        <h5 class="fw-bold" style="color:#0F172A;">Chưa có giảng viên nào</h5>
+        <p style="color:#94A3B8;margin-bottom:20px;">Thêm giảng viên đầu tiên để bắt đầu quản lý.</p>
+        <div>
+          <a href="{% url 'teacher_add' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Thêm giảng viên
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock content %}

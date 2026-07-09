@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ teacher.name }} | Giảng viên{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-header-left d-flex align-items-center gap-3">
+      <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#22C55E,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:800;flex-shrink:0;">
+        {{ teacher.name|first|upper }}
+      </div>
+      <div>
+        <h1 style="font-size:20px;">{{ teacher.name }}</h1>
+        <p>
+          Quản lý học phí và thống kê theo đợt dạy
+          {% if teacher.phone %}
+          &nbsp;·&nbsp;
+          <span style="color:#64748B;font-weight:500;"><i class="fas fa-phone-alt" style="font-size:11px;color:#64748B;"></i> {{ teacher.phone }}</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'payment_period_add' %}?teacher={{ teacher.id }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Thêm đợt đóng tiền
+      </a>
+      <a href="{% url 'teacher_edit' teacher.id %}" class="btn btn-outline-primary">
+        <i class="fas fa-edit"></i> Sửa thông tin
+      </a>
+      <a href="{% url 'teacher_import_excel' teacher.id %}" class="btn btn-outline-success">
+        <i class="fas fa-file-excel"></i> Nhập Excel
+      </a>
+      <a href="{% url 'teacher_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Quay lại
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Left column: Stats + Subjects -->
+    <div class="col-12 col-lg-3">
+
+      <!-- Revenue card -->
+      <div class="stat-card mb-3" style="border-left:4px solid #22C55E;">
+        <div class="stat-label">Tổng doanh thu</div>
+        <div class="stat-value text-success mt-1">{{ total_earned|floatformat:0 }}</div>
+        <div style="font-size:12px;color:#94A3B8;margin-top:2px;">VNĐ</div>
+      </div>
+
+      <!-- Net received card -->
+      <div class="stat-card mb-4" style="border-left:4px solid #4F6EF7;">
+        <div class="stat-label">Thực nhận (80%)</div>
+        <div class="stat-value text-primary mt-1">{{ total_net_earned|floatformat:0 }}</div>
+        <div style="font-size:12px;color:#94A3B8;margin-top:2px;">VNĐ</div>
+      </div>
+
+      <!-- Subjects taught -->
+      <div class="card p-3">
+        <h6 class="fw-bold mb-3" style="font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:#64748B;">
+          <i class="fas fa-book-open" style="color:#06B6D4;font-size:12px;"></i> Môn giảng dạy
+        </h6>
+        {% for s in subjects %}
+        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #F1F5F9;">
+          <span style="font-size:13.5px;font-weight:500;color:#0F172A;">{{ s.name }}</span>
+          <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:11px;">Môn học</span>
+        </div>
+        {% empty %}
+        <div class="text-center py-3" style="color:#94A3B8;font-size:13px;">Chưa có môn giảng dạy</div>
+        {% endfor %}
+      </div>
+
+    </div>
+
+    <!-- Right column: Period tabs + Tables -->
+    <div class="col-12 col-lg-9">
+      {% if not period_reports %}
+      <div class="card p-5 text-center" style="border:2px dashed #E2E8F0 !important;background:#FAFBFF !important;">
+        <i class="fas fa-calendar-plus fa-3x mb-3" style="color:#CBD5E1;"></i>
+        <h5 class="fw-bold" style="color:#0F172A;">Chưa có đợt đóng tiền nào</h5>
+        <p style="color:#94A3B8;font-size:13.5px;margin-bottom:20px;">Tạo đợt đóng tiền để bắt đầu theo dõi học phí học sinh của giảng viên này.</p>
+        <div>
+          <a href="{% url 'payment_period_add' %}?teacher={{ teacher.id }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Tạo đợt đóng tiền
+          </a>
+        </div>
+      </div>
+      {% else %}
+
+      <!-- Period selector pills -->
+      <div class="mb-3">
+        <div style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#94A3B8;margin-bottom:8px;">
+          <i class="fas fa-filter" style="font-size:11px;"></i> Chọn đợt:
+        </div>
+        <ul class="nav nav-pills gap-2 flex-wrap" id="pills-tab" role="tablist">
+          {% for report in period_reports %}
+          <li class="nav-item" role="presentation">
+            <button class="nav-link {% if forloop.first %}active{% endif %}"
+                    id="pills-tab-{{ forloop.counter }}"
+                    data-bs-toggle="pill"
+                    data-bs-target="#pills-period-{{ forloop.counter }}"
+                    type="button" role="tab">
+              {{ report.simple_name }}
+              <span style="font-size:11px;opacity:0.8;">({{ report.subject_name }})</span>
+            </button>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- Tab contents -->
+      <div class="tab-content" id="pills-tabContent">
+        {% for report in period_reports %}
+        <div class="tab-pane fade {% if forloop.first %}show active{% endif %}"
+             id="pills-period-{{ forloop.counter }}"
+             role="tabpanel"
+             aria-labelledby="pills-tab-{{ forloop.counter }}">
+
+          <div class="table-card">
+            <div class="table-card-header">
+              <div class="table-card-title">
+                <i class="fas fa-calendar-check"></i>
+                {{ report.period_name }}
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <span style="font-size:12px;color:#64748B;">
+                  Thu: <strong class="text-success">{{ report.total_paid|floatformat:0 }} VNĐ</strong>
+                  &nbsp;|&nbsp;
+                  Thực nhận: <strong class="text-primary">{{ report.total_net|floatformat:0 }} VNĐ</strong>
+                </span>
+                <button onclick="exportPeriodToCSV('{{ report.period_name }}', 'table-{{ forloop.counter }}')" class="btn btn-outline-success btn-sm">
+                  <i class="fas fa-file-excel"></i> Xuất Excel
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="lms-table" id="table-{{ forloop.counter }}">
+                <thead>
+                  <tr>
+                    <th>Học sinh</th>
+                    <th>Lớp</th>
+                    <th>Trạng thái</th>
+                    <th style="text-align:right;">Số tiền</th>
+                    <th style="text-align:right;">Thực nhận (80%)</th>
+                    <th style="text-align:center;">Ngày đóng</th>
+                    <th class="no-export" style="text-align:right;">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in report.records %}
+                  <tr>
+                    <td>
+                      <a href="{% url 'student_detail' r.student.id %}" class="fw-semibold" style="color:#0F172A;text-decoration:none;">
+                        {{ r.student.name }}
+                      </a>
+                    </td>
+                    <td style="color:#64748B;">{{ r.student.classroom.name }}</td>
+                    <td>
+                      {% if r.status == "Đã đóng" %}
+                        <span class="status-badge status-paid"><i class="fas fa-check-circle"></i> Đã đóng</span>
+                      {% else %}
+                        <span class="status-badge status-unpaid"><i class="fas fa-clock"></i> Chưa đóng</span>
+                      {% endif %}
+                    </td>
+                    <td style="text-align:right;" class="fw-semibold {% if r.status == 'Đã đóng' %}text-success{% else %}text-muted{% endif %}">
+                      {% if r.status == "Đã đóng" %}{{ r.amount|floatformat:0 }} VNĐ{% else %}-{% endif %}
+                    </td>
+                    <td style="text-align:right;" class="fw-bold {% if r.status == 'Đã đóng' %}text-primary{% else %}text-muted{% endif %}">
+                      {% if r.status == "Đã đóng" %}{{ r.net_amount|floatformat:0 }} VNĐ{% else %}-{% endif %}
+                    </td>
+                    <td style="text-align:center;color:#94A3B8;font-size:12.5px;">
+                      {% if r.date %}{{ r.date|date:"d/m/Y" }}{% else %}-{% endif %}
+                    </td>
+                    <td style="text-align:right;" class="no-export">
+                      {% if r.status == "Đã đóng" %}
+                        <div class="d-flex justify-content-end gap-1">
+                          {% if r.payment.receipt_pdf %}
+                          <a href="{{ r.payment.receipt_pdf.url }}" class="btn btn-outline-success btn-xs" target="_blank" title="Tải PDF">
+                            <i class="fas fa-file-pdf"></i>
+                          </a>
+                          {% endif %}
+                          <a href="{% url 'payment_receipt' r.payment_id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="In biên lai">
+                            <i class="fas fa-print"></i>
+                          </a>
+                          <a href="{% url 'payment_delete' r.payment_id %}" class="btn btn-outline-danger btn-xs" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
+                            <i class="fas fa-trash-alt"></i>
+                          </a>
+                        </div>
+                      {% else %}
+                        <a href="{% url 'payment_add' %}?student={{ r.student.id }}&period={{ report.period_id }}" class="btn btn-success btn-xs">
+                          <i class="fas fa-plus"></i> Thu phí
+                        </a>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="7" class="text-center py-5" style="color:#94A3B8;">
+                      <i class="fas fa-inbox fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+                      Chưa có học sinh nào đăng ký môn học này
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr class="total-row">
+                    <td colspan="3" class="fw-bold">TỔNG ĐÃ THU</td>
+                    <td style="text-align:right;" class="fw-bold text-success">{{ report.total_paid|floatformat:0 }} VNĐ</td>
+                    <td style="text-align:right;" class="fw-bold text-primary">{{ report.total_net|floatformat:0 }} VNĐ</td>
+                    <td colspan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+  function exportPeriodToCSV(periodName, tableId) {
+    const csv = [];
+    const rows = document.querySelectorAll("#" + tableId + " tr");
+    for (let i = 0; i < rows.length; i++) {
+      const row = [];
+      const cols = rows[i].querySelectorAll("td:not(.no-export), th:not(.no-export)");
+      for (let j = 0; j < cols.length; j++) {
+        let text = cols[j].innerText.trim().replace(/"/g, '""');
+        row.push('"' + text + '"');
+      }
+      csv.push(row.join(","));
+    }
+    const csvContent = "\ufeff" + csv.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", "GV_{{ teacher.name }}_" + periodName.replace(/\s+/g, '_') + ".csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+</script>
+{% endblock js %}

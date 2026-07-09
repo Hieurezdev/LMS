@@ -1,0 +1,406 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard | Quản lý Học sinh & Giảng viên{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+<div class="row mt-2 mb-3">
+    <div class="col-12 col-md-8">
+        <h2 class="text-dark fw-bold mb-1">Hệ Thống Quản Lý Học Sinh & Giảng Viên</h2>
+        <p class="text-secondary small">Thống kê doanh thu, lớp học, môn học và giảng viên</p>
+    </div>
+</div>
+
+<!-- Quick Shortcuts -->
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+            <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="fw-bold text-secondary me-2"><i class="fas fa-bolt text-warning me-1"></i>Thao tác nhanh:</span>
+                <a href="{% url 'classroom_add' %}" class="btn btn-outline-primary rounded-3 btn-sm px-3">
+                    <i class="fas fa-plus me-1"></i> Thêm Lớp học
+                </a>
+                <a href="{% url 'student_add' %}" class="btn btn-outline-success rounded-3 btn-sm px-3">
+                    <i class="fas fa-plus me-1"></i> Thêm Học sinh
+                </a>
+                <a href="{% url 'subject_add' %}" class="btn btn-outline-info rounded-3 btn-sm px-3">
+                    <i class="fas fa-plus me-1"></i> Thêm Môn học
+                </a>
+                <a href="{% url 'teacher_add' %}" class="btn btn-outline-warning text-dark rounded-3 btn-sm px-3">
+                    <i class="fas fa-plus me-1"></i> Thêm Giảng viên
+                </a>
+                <a href="{% url 'payment_period_add' %}" class="btn btn-outline-secondary rounded-3 btn-sm px-3">
+                    <i class="fas fa-plus me-1"></i> Thêm Đợt đóng tiền
+                </a>
+                <a href="{% url 'payment_add' %}" class="btn btn-success rounded-3 btn-sm px-3">
+                    <i class="fas fa-wallet me-1"></i> Đóng học phí
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert messages -->
+{% if messages %}
+    <div class="row">
+        <div class="col-12">
+            {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endif %}
+
+<!-- Onboarding Wizard (chỉ hiện khi chưa hoàn thành) -->
+{% if not setup_all_done %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="px-4 py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(90deg, #e7f1ff 0%, #f8f9fa 100%);">
+                <div>
+                    <h5 class="fw-bold text-dark mb-1">
+                        <i class="fas fa-rocket text-primary me-2"></i>Khởi động nhanh
+                    </h5>
+                    <p class="text-secondary small mb-0">Hoàn thành {{ setup_done_count }}/{{ setup_total }} bước để bắt đầu thu học phí</p>
+                </div>
+                <div class="d-none d-md-block">
+                    <div class="progress" style="height: 8px; width: 200px;">
+                        {% with pct=setup_done_count|stringformat:"s"|add:".0" %}
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {% widthratio setup_done_count setup_total 100 %}%"></div>
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+            <div class="p-4">
+                <div class="row g-3">
+                    {% for step in setup_steps %}
+                        <div class="col-12 col-md-6 col-xl-3">
+                            <a href="{% url step.url_name %}" class="text-decoration-none">
+                                <div class="d-flex align-items-start p-3 rounded-4 h-100 {% if step.done %}bg-light{% else %}bg-white border border-2 border-dashed{% endif %}" style="transition: all 0.2s;">
+                                    <div class="me-3">
+                                        {% if step.done %}
+                                            <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                                <i class="fas fa-check"></i>
+                                            </div>
+                                        {% else %}
+                                            <div class="rounded-circle bg-{{ step.color }} bg-opacity-10 text-{{ step.color }} d-flex align-items-center justify-content-center" style="width: 42px; height: 42px;">
+                                                <i class="fas {{ step.icon }}"></i>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="fw-bold text-dark">{{ forloop.counter }}. {{ step.label }}</span>
+                                            {% if step.done %}
+                                                <span class="badge bg-success-subtle text-success">{{ step.count }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <p class="text-secondary small mb-0">{{ step.desc }}</p>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Công nợ nổi bật -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <a href="{% url 'debt_dashboard' %}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm rounded-4 p-3 h-100 {% if debt_total_count > 0 %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                    <div>
+                        <h6 class="mb-0 text-white-50 small">Học phí chưa thu</h6>
+                        <h3 class="mb-0 fw-bold">{{ debt_total_count }} <span class="small fs-6">khoản</span></h3>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <div class="col-12 col-md-8">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold text-dark mb-0">
+                    <i class="fas fa-bell text-danger me-1"></i>Các khoản chưa đóng gần đây
+                </h6>
+                {% if debt_total_count > 0 %}
+                <a href="{% url 'debt_dashboard' %}" class="btn btn-sm btn-outline-danger rounded-3">
+                    Xem tất cả <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+                {% endif %}
+            </div>
+            <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <tbody>
+                        {% for r in debt_rows %}
+                            <tr>
+                                <td class="fw-semibold">
+                                    <a href="{% url 'student_detail' r.student.id %}" class="text-decoration-none text-dark">
+                                        {{ r.student.name }}
+                                    </a>
+                                    <span class="text-muted small ms-1">- {{ r.classroom.name }}</span>
+                                </td>
+                                <td class="small text-secondary">{{ r.subject.name }} <span class="text-muted">({{ r.teacher.name }})</span></td>
+                                <td class="text-end">
+                                    <a href="{% url 'payment_add' %}?student={{ r.student.id }}&period={{ r.period.id }}" class="btn btn-xs btn-success rounded-3 py-0 px-2">
+                                        <i class="fas fa-wallet"></i> Thu
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td class="text-center text-success py-3">
+                                    <i class="fas fa-check-circle me-1"></i>Tuyệt vời! Tất cả học sinh đã đóng đủ.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-primary text-white">
+            <div class="d-flex align-items-center">
+                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
+                    <i class="fas fa-wallet fa-2x"></i>
+                </div>
+                <div>
+                    <h6 class="mb-0 text-white-50 small">Tổng doanh thu</h6>
+                    <h3 class="mb-0 fw-bold">{{ total_revenue|floatformat:0 }} <span class="small fs-6">VNĐ</span></h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-success text-white">
+            <div class="d-flex align-items-center">
+                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
+                    <i class="fas fa-user-graduate fa-2x"></i>
+                </div>
+                <div>
+                    <h6 class="mb-0 text-white-50 small">Tổng số học sinh</h6>
+                    <h3 class="mb-0 fw-bold">{{ student_count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-info text-white">
+            <div class="d-flex align-items-center">
+                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
+                    <i class="fas fa-chalkboard-teacher fa-2x"></i>
+                </div>
+                <div>
+                    <h6 class="mb-0 text-white-50 small">Tổng số giảng viên</h6>
+                    <h3 class="mb-0 fw-bold">{{ teacher_count }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-warning text-dark">
+            <div class="d-flex align-items-center">
+                <div class="p-3 bg-dark bg-opacity-10 rounded-3 me-3">
+                    <i class="fas fa-book-open fa-2x"></i>
+                </div>
+                <div>
+                    <h6 class="mb-0 text-black-50 small">Lớp & Môn học</h6>
+                    <h3 class="mb-0 fw-bold">{{ class_count }} Lớp / {{ subject_count }} Môn</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <h5 class="fw-bold mb-3"><i class="fas fa-chart-bar text-primary me-2"></i>Doanh thu theo Đợt đóng tiền</h5>
+            <div style="position: relative; height: 300px;">
+                <canvas id="periodChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <h5 class="fw-bold mb-3"><i class="fas fa-chart-pie text-success me-2"></i>Doanh thu theo Môn học</h5>
+            <div style="position: relative; height: 300px;">
+                <canvas id="subjectChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-5">
+    <!-- Revenue Details Tables -->
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <h5 class="fw-bold mb-3"><i class="fas fa-school text-info me-2"></i>Doanh thu theo Lớp học</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tên Lớp</th>
+                            <th class="text-end">Doanh thu (VNĐ)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in revenue_by_class %}
+                            <tr>
+                                <td class="fw-semibold text-dark">
+                                    <a href="{% url 'classroom_detail' item.classroom__id %}" class="text-decoration-none text-primary">
+                                        <i class="fas fa-school me-1 text-secondary"></i>{{ item.classroom__name }}
+                                    </a>
+                                </td>
+                                <td class="text-end fw-bold text-success">{{ item.total|floatformat:0 }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Chưa có dữ liệu thanh toán nào</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <h5 class="fw-bold mb-3"><i class="fas fa-user-tie text-warning me-2"></i>Doanh thu theo Giảng viên</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tên Giảng viên</th>
+                            <th class="text-end">Doanh thu (VNĐ)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in revenue_by_teacher %}
+                            <tr>
+                                <td class="fw-semibold text-dark">
+                                    <a href="{% url 'teacher_detail' item.teacher__id %}" class="text-decoration-none text-primary">
+                                        <i class="fas fa-user-tie me-1 text-secondary"></i>{{ item.teacher__name }}
+                                    </a>
+                                </td>
+                                <td class="text-end fw-bold text-success">{{ item.total|floatformat:0 }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Chưa có dữ liệu thanh toán nào</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<!-- Include Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Prepare Data for Period Chart
+    const periodLabels = [{% for item in revenue_by_period %}"{{ item.payment_period__name }}",{% endfor %}];
+    const periodData = [{% for item in revenue_by_period %}{{ item.total }},{% endfor %}];
+
+    const ctxPeriod = document.getElementById('periodChart').getContext('2d');
+    new Chart(ctxPeriod, {
+        type: 'bar',
+        data: {
+            labels: periodLabels.length ? periodLabels : ["Chưa có dữ liệu"],
+            datasets: [{
+                label: 'Doanh thu (VNĐ)',
+                data: periodData.length ? periodData : [0],
+                backgroundColor: 'rgba(13, 110, 253, 0.75)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value.toLocaleString() + ' đ';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+
+    // Prepare Data for Subject Chart
+    const subjectLabels = [{% for item in revenue_by_subject %}"{{ item.subject__name }}",{% endfor %}];
+    const subjectData = [{% for item in revenue_by_subject %}{{ item.total }},{% endfor %}];
+    const colors = [
+        '#0d6efd', '#198754', '#0dcaf0', '#ffc107', '#dc3545',
+        '#6610f2', '#6f42c1', '#d63384', '#fd7e14', '#20c997'
+    ];
+
+    const ctxSubject = document.getElementById('subjectChart').getContext('2d');
+    new Chart(ctxSubject, {
+        type: 'doughnut',
+        data: {
+            labels: subjectLabels.length ? subjectLabels : ["Chưa có dữ liệu"],
+            datasets: [{
+                data: subjectData.length ? subjectData : [0],
+                backgroundColor: colors.slice(0, Math.max(subjectLabels.length, 1)),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock js %}

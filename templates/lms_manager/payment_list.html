@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+
+{% block title %}Giao dịch học phí{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Giao dịch học phí</h1>
+      <p>Danh sách biên lai thu học phí của học sinh</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'payment_add' %}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Ghi nhận đóng học phí
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="table-card">
+    <div class="table-card-header">
+      <div class="table-card-title">
+        <i class="fas fa-wallet"></i>
+        Danh sách giao dịch
+      </div>
+      <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payments|length }} giao dịch</span>
+    </div>
+    <div class="table-responsive">
+      <table class="lms-table">
+        <thead>
+          <tr>
+            <th>Học sinh</th>
+            <th>Lớp</th>
+            <th>Môn học</th>
+            <th>Giảng viên</th>
+            <th>Đợt đóng tiền</th>
+            <th style="text-align:right;">Số tiền</th>
+            <th>Ngày đóng</th>
+            <th style="text-align:right;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>
+              <a href="{% url 'student_detail' p.student.id %}" class="fw-semibold" style="color:#0F172A;text-decoration:none;">
+                {{ p.student.name }}
+              </a>
+            </td>
+            <td>
+              <a href="{% url 'classroom_detail' p.classroom.id %}" style="text-decoration:none;">
+                <span class="badge" style="background:#F1F5F9;color:#475569;font-size:12px;padding:4px 10px;">{{ p.classroom.name }}</span>
+              </a>
+            </td>
+            <td style="color:#475569;">{{ p.subject.name }}</td>
+            <td>
+              <a href="{% url 'teacher_detail' p.teacher.id %}" style="color:#64748B;text-decoration:none;font-size:13px;">
+                {{ p.teacher.name }}
+              </a>
+            </td>
+            <td>
+              <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:4px 10px;">{{ p.payment_period.name }}</span>
+            </td>
+            <td style="text-align:right;" class="fw-bold text-success">{{ p.amount|floatformat:0 }} VNĐ</td>
+            <td style="color:#94A3B8;font-size:12.5px;">{{ p.payment_date|date:"d/m/Y" }}</td>
+            <td style="text-align:right;">
+              <div class="d-flex justify-content-end gap-1">
+                {% if p.receipt_pdf %}
+                <a href="{{ p.receipt_pdf.url }}" class="btn btn-outline-success btn-xs" target="_blank" title="Tải PDF">
+                  <i class="fas fa-file-pdf"></i>
+                </a>
+                {% endif %}
+                <a href="{% url 'payment_receipt' p.id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="In biên lai">
+                  <i class="fas fa-print"></i>
+                </a>
+                <a href="{% url 'payment_delete' p.id %}" class="btn btn-outline-danger btn-xs"
+                   onclick="return confirm('Xóa giao dịch này?');" title="Xóa">
+                  <i class="fas fa-trash"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center py-5" style="color:#94A3B8;">
+              <i class="fas fa-receipt fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+              Chưa có giao dịch nào được ghi nhận
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock content %}

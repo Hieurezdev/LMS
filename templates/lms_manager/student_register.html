@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Đăng ký môn học | {{ student.name }}{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row mt-2 mb-3">
+    <div class="col-12">
+        <h3 class="text-dark fw-bold mb-1">Đăng ký học: {{ student.name }}</h3>
+        <p class="text-secondary small">Lớp: <span class="badge bg-secondary">{{ student.classroom.name }}</span></p>
+    </div>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="row g-4">
+    <!-- Form Đăng ký -->
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-plus-circle text-primary me-2"></i>Đăng ký môn mới</h5>
+            <form method="POST">
+                {% csrf_token %}
+                {{ form|crispy }}
+                
+                <div class="mt-4 text-end">
+                    <a href="{% url 'student_list' %}" class="btn btn-outline-secondary rounded-3 px-3 me-2">Quay lại danh sách</a>
+                    <button type="submit" class="btn btn-success rounded-3 px-3">
+                        <i class="fas fa-save me-2"></i>Đăng ký
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Danh sách môn học hiện tại -->
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-list text-success me-2"></i>Môn học đã đăng ký</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Môn học</th>
+                            <th>Giảng viên giảng dạy</th>
+                            <th class="text-end">Hành động</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in enrollments %}
+                            <tr>
+                                <td class="fw-semibold text-dark">{{ e.subject.name }}</td>
+                                <td class="text-secondary">{{ e.teacher.name }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'enrollment_delete' e.id %}" class="btn btn-sm btn-outline-danger rounded-3" onclick="return confirm('Bạn có chắc muốn hủy đăng ký môn này không?');">
+                                        <i class="fas fa-trash-alt me-1"></i>Hủy đăng ký
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted py-4">Chưa có môn học nào được đăng ký</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const subjectSelect = document.getElementById("id_subject");
+        const teacherSelect = document.getElementById("id_teacher");
+
+        if (subjectSelect && teacherSelect) {
+            function loadTeachers() {
+                const subjectId = subjectSelect.value;
+                if (!subjectId) {
+                    teacherSelect.innerHTML = '<option value="">---------</option>';
+                    return;
+                }
+
+                let urlPattern = "{% url 'api_subject_teachers' subject_id=999999 %}";
+                let url = urlPattern.replace("999999", subjectId);
+                const currentVal = teacherSelect.value;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        let options = '<option value="">Chọn giảng viên giảng dạy</option>';
+                        data.teachers.forEach(t => {
+                            let selected = (t.id == currentVal) ? 'selected' : '';
+                            options += `<option value="${t.id}" ${selected}>${t.name}</option>`;
+                        });
+                        teacherSelect.innerHTML = options;
+                    })
+                    .catch(err => {
+                        console.error("Lỗi tải giảng viên:", err);
+                    });
+            }
+
+            // Bind change event
+            subjectSelect.addEventListener("change", loadTeachers);
+
+            // Trigger initially if subject is already selected
+            if (subjectSelect.value) {
+                loadTeachers();
+            }
+        }
+    });
+</script>
+{% endblock js %}
+

@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ student.name }} | Chi tiết học sinh{% endblock title %}
+
+{% block header %}
+<style>
+.payment-row-paid { }
+.payment-row-unpaid { background: #FFFBEB !important; }
+</style>
+{% endblock header %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="page-header-left d-flex align-items-center gap-3">
+      <div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#4F6EF7,#7C3AED);display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:800;flex-shrink:0;">
+        {{ student.name|first|upper }}
+      </div>
+      <div>
+        <h1 style="font-size:20px;">{{ student.name }}</h1>
+        <p>
+          <i class="fas fa-school" style="color:#4F6EF7;font-size:12px;"></i>
+          Lớp:
+          <a href="{% url 'classroom_detail' classroom.id %}" style="color:#4F6EF7;font-weight:600;">{{ classroom.name }}</a>
+          {% if student.phone %}
+          &nbsp;·&nbsp;
+          <span style="color:#64748B;font-weight:500;"><i class="fas fa-phone-alt" style="font-size:11px;color:#64748B;"></i> {{ student.phone }}</span>
+          {% endif %}
+          {% if total_paid > 0 %}
+          &nbsp;·&nbsp;
+          <span style="color:#22C55E;font-weight:600;">Đã nộp {{ total_paid|floatformat:0 }} VNĐ</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'student_edit' student.id %}" class="btn btn-outline-primary">
+        <i class="fas fa-edit"></i> Sửa thông tin
+      </a>
+      <a href="{% url 'student_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Quay lại
+      </a>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Left column: Enrolled subjects -->
+    <div class="col-12 col-lg-4">
+      <div class="info-card mb-3">
+        <h6><i class="fas fa-chart-bar" style="color:#4F6EF7;"></i> &nbsp;Tổng đã nộp</h6>
+        <div class="value text-success">{{ total_paid|floatformat:0 }} <span style="font-size:14px;font-weight:500;">VNĐ</span></div>
+      </div>
+
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0" style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#64748B;">
+            <i class="fas fa-book-open" style="color:#06B6D4;font-size:13px;"></i> Môn học đăng ký
+          </h6>
+          <span class="badge" style="background:#EEF1FE;color:#4F6EF7;">{{ enrollments|length }} môn</span>
+        </div>
+
+        {% for e in enrollments %}
+        <div class="d-flex justify-content-between align-items-center py-2" style="border-bottom:1px solid #F1F5F9;">
+          <div>
+            <div class="fw-semibold" style="font-size:13.5px;color:#0F172A;">{{ e.subject.name }}</div>
+            <div style="font-size:12px;color:#94A3B8;">GV: {{ e.teacher.name }}</div>
+          </div>
+          <a href="{% url 'enrollment_delete' e.id %}"
+             onclick="return confirm('Hủy đăng ký học môn này?');"
+             class="btn btn-outline-danger btn-xs" title="Hủy đăng ký">
+            <i class="fas fa-times"></i>
+          </a>
+        </div>
+        {% empty %}
+        <div class="text-center py-4" style="color:#94A3B8;font-size:13px;">
+          <i class="fas fa-inbox fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+          Chưa đăng ký môn học nào
+        </div>
+        {% endfor %}
+
+        <a href="{% url 'student_register' student.id %}" class="btn btn-primary w-100 mt-3">
+          <i class="fas fa-plus"></i> Đăng ký môn học mới
+        </a>
+      </div>
+    </div>
+
+    <!-- Right column: Payment table -->
+    <div class="col-12 col-lg-8">
+      <div class="table-card">
+        <div class="table-card-header">
+          <div class="table-card-title">
+            <i class="fas fa-file-invoice-dollar"></i>
+            Bảng kê học phí
+          </div>
+          <button onclick="exportToCSV()" class="btn btn-outline-success btn-sm">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+          </button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="lms-table" id="student-payment-table">
+            <thead>
+              <tr>
+                <th>Đợt đóng tiền</th>
+                <th>Môn học</th>
+                <th>Giảng viên</th>
+                <th>Trạng thái</th>
+                <th style="text-align:right;">Số tiền</th>
+                <th style="text-align:center;">Ngày đóng</th>
+                <th class="no-export" style="text-align:right;">Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in records %}
+              <tr class="{% if r.status == 'Đã đóng' %}payment-row-paid{% else %}payment-row-unpaid{% endif %}">
+                <td class="fw-semibold">{{ r.period.name }}</td>
+                <td style="color:#64748B;">{{ r.period.subject.name }}</td>
+                <td style="color:#64748B;">{{ r.period.teacher.name }}</td>
+                <td>
+                  {% if r.status == "Đã đóng" %}
+                    <span class="status-badge status-paid">
+                      <i class="fas fa-check-circle"></i> Đã đóng
+                    </span>
+                  {% else %}
+                    <span class="status-badge status-unpaid">
+                      <i class="fas fa-clock"></i> Chưa đóng
+                    </span>
+                  {% endif %}
+                </td>
+                <td style="text-align:right;" class="fw-semibold {% if r.status == 'Đã đóng' %}text-success{% else %}text-muted{% endif %}">
+                  {% if r.status == "Đã đóng" %}{{ r.amount|floatformat:0 }} VNĐ{% else %}-{% endif %}
+                </td>
+                <td style="text-align:center;color:#94A3B8;font-size:12.5px;">
+                  {% if r.date %}{{ r.date|date:"d/m/Y" }}{% else %}-{% endif %}
+                </td>
+                <td style="text-align:right;" class="no-export">
+                  {% if r.status == "Đã đóng" %}
+                    <div class="d-flex justify-content-end gap-1">
+                      {% if r.payment.receipt_pdf %}
+                      <a href="{{ r.payment.receipt_pdf.url }}" class="btn btn-outline-success btn-xs" target="_blank" title="Tải PDF biên lai">
+                        <i class="fas fa-file-pdf"></i>
+                      </a>
+                      {% endif %}
+                      <a href="{% url 'payment_receipt' r.payment_id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="In biên lai">
+                        <i class="fas fa-print"></i>
+                      </a>
+                      <a href="{% url 'payment_delete' r.payment_id %}" class="btn btn-outline-danger btn-xs" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
+                        <i class="fas fa-trash-alt"></i>
+                      </a>
+                    </div>
+                  {% else %}
+                    <a href="{% url 'payment_add' %}?student={{ student.id }}&period={{ r.period.id }}" class="btn btn-success btn-xs">
+                      <i class="fas fa-plus"></i> Thu phí
+                    </a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="7" class="text-center py-5" style="color:#94A3B8;">
+                  <i class="fas fa-inbox fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
+                  Chưa có đợt đóng học phí nào được áp dụng
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="total-row">
+                <td colspan="4" class="fw-bold">TỔNG ĐÃ THU</td>
+                <td style="text-align:right;" class="fw-bold text-success">{{ total_paid|floatformat:0 }} VNĐ</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block js %}
+<script>
+  function exportToCSV() {
+    const csv = [];
+    const rows = document.querySelectorAll("#student-payment-table tr");
+    for (let i = 0; i < rows.length; i++) {
+      const row = [];
+      const cols = rows[i].querySelectorAll("td:not(.no-export), th:not(.no-export)");
+      for (let j = 0; j < cols.length; j++) {
+        let text = cols[j].innerText.trim().replace(/"/g, '""');
+        row.push('"' + text + '"');
+      }
+      csv.push(row.join(","));
+    }
+    const csvContent = "\ufeff" + csv.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.setAttribute("href", URL.createObjectURL(blob));
+    link.setAttribute("download", "Ban_ke_hoc_phi_{{ student.name }}.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+</script>
+{% endblock js %}

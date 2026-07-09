@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Nhập lớp học & môn dạy từ Excel/CSV | {{ teacher.name }}{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row justify-content-center mt-3">
+    <div class="col-12 col-md-10 col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h4 class="fw-bold text-dark mb-2 text-center">Nhập Lớp học & Môn dạy từ Excel/CSV</h4>
+            <p class="text-secondary text-center small mb-4">Giảng viên: <span class="fw-bold text-dark">{{ teacher.name }}</span></p>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Instructions Box -->
+            <div class="card bg-light border-0 rounded-4 p-4 mb-4">
+                <h5 class="fw-bold text-dark mb-3"><i class="fas fa-info-circle text-primary me-2"></i>Hướng dẫn chuẩn bị File Excel/CSV</h5>
+                <ol class="text-secondary small mb-3 ps-3">
+                    <li class="mb-2">Hệ thống chấp nhận tệp định dạng **CSV** (phân tách bằng dấu phẩy `,`). Bạn có thể thiết lập file trong Microsoft Excel hoặc Google Sheets rồi chọn **Save As -> CSV UTF-8 (Comma delimited) (*.csv)**.</li>
+                    <li class="mb-2">File tải lên cần tuân thủ cấu trúc chính xác gồm **2 cột** theo thứ tự:
+                        <ul>
+                            <li>Cột 1: **Tên Lớp học** (ví dụ: `10A1`, `11B2`, `Lớp Toán nâng cao`)</li>
+                            <li>Cột 2: **Môn giảng dạy** (ví dụ: `Toán học`, `Vật lí`, `Tiếng Anh`)</li>
+                        </ul>
+                    </li>
+                    <li class="mb-2">Hệ thống sẽ **tự động viết hoa/chuẩn hóa** tên lớp và tên môn học, đồng thời tự động tạo mới lớp học/môn học nếu chúng chưa có trong cơ sở dữ liệu.</li>
+                </ol>
+                <div class="text-start">
+                    <a href="{% url 'teacher_import_template' %}" class="btn btn-sm btn-outline-primary rounded-3">
+                        <i class="fas fa-download me-1"></i> Tải File mẫu (.csv)
+                    </a>
+                </div>
+            </div>
+
+            <!-- Upload Form -->
+            <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                {% csrf_token %}
+                
+                <div class="mb-4">
+                    <label for="excel_file" class="form-label fw-bold text-dark">Chọn file từ máy tính của bạn:</label>
+                    <input type="file" name="excel_file" id="excel_file" class="form-control rounded-3" accept=".csv" required>
+                    <div class="form-text text-muted">Chỉ tải lên tệp định dạng .csv</div>
+                </div>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'teacher_detail' teacher.id %}" class="btn btn-outline-secondary px-4 rounded-3">
+                        <i class="fas fa-arrow-left me-2"></i>Hủy bỏ
+                    </a>
+                    <button type="submit" class="btn btn-success px-4 rounded-3">
+                        <i class="fas fa-upload me-2"></i>Bắt đầu Nhập dữ liệu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}
