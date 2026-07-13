@@ -78,20 +78,30 @@
     </div>
 
     <div class="table-responsive">
-      <table class="lms-table" id="student-excel-table">
-        <thead>
+      <table class="lms-table table table-hover align-middle mb-0" id="student-excel-table" style="font-size: 13.5px;">
+        <thead class="table-light text-center">
           <tr>
-            <th>Học sinh</th>
-            <th>Lớp</th>
-            <th>Môn học & Giảng viên</th>
-            <th class="no-export" style="text-align:right;">Hành động</th>
+            <th style="width: 50px;">STT</th>
+            <th class="text-start">Học sinh</th>
+            <th class="text-start" style="width: 110px;">Lớp</th>
+            <th style="width: 110px;">Bắt đầu</th>
+            <th style="width: 90px;">Đợt 1</th>
+            <th style="width: 90px;">Đợt 2</th>
+            <th style="width: 90px;">Đợt 3</th>
+            <th style="width: 90px;">Đợt 4</th>
+            <th style="width: 90px;">Đợt 5</th>
+            <th style="width: 90px;">Đợt 6</th>
+            <th style="width: 90px;">Đợt 7</th>
+            <th style="width: 90px;">Đợt 8</th>
+            <th class="no-export" style="width: 140px;">Hành động</th>
           </tr>
         </thead>
         <tbody>
           {% for s in students %}
           <tr>
-            <td>
-              <a href="{% url 'student_detail' s.id %}" class="fw-semibold" style="color:#0F172A;text-decoration:none;">
+            <td class="text-center fw-semibold text-secondary">{{ forloop.counter }}</td>
+            <td class="text-start">
+              <a href="{% url 'student_detail' s.id %}" class="fw-semibold text-dark text-decoration-none d-block">
                 <div style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#EEF1FE;color:#4F6EF7;font-size:12px;font-weight:700;margin-right:8px;vertical-align:middle;">
                   {{ s.name|first|upper }}
                 </div>
@@ -103,26 +113,83 @@
               </div>
               {% endif %}
             </td>
-            <td>
+            <td class="text-start">
+              {% if s.classroom %}
               <a href="{% url 'classroom_detail' s.classroom.id %}" style="text-decoration:none;">
                 <span class="badge" style="background:#F1F5F9;color:#475569;font-size:12px;padding:4px 10px;">
                   {{ s.classroom.name }}
                 </span>
               </a>
+              {% else %}
+              <span class="badge" style="background:#F1F5F9;color:#475569;font-size:12px;padding:4px 10px;">
+                Không có lớp
+              </span>
+              {% endif %}
             </td>
-            <td>
-              {% for e in s.enrollments.all %}
-              <div style="font-size:13px;color:#475569;margin-bottom:2px;">
-                <i class="fas fa-book" style="color:#06B6D4;font-size:10px;"></i>
-                {{ e.subject.name }}
-                <span style="color:#94A3B8;">({{ e.teacher.name }})</span>
-              </div>
-              {% empty %}
-              <span style="color:#94A3B8;font-size:13px;">Chưa đăng ký môn nào</span>
-              {% endfor %}
+            <td class="text-center text-secondary">
+              {% if s.start_date %}{{ s.start_date|date:"d/m/Y" }}{% else %}-{% endif %}
             </td>
-            <td style="text-align:right;" class="no-export">
-              <div class="d-flex justify-content-end gap-1">
+            
+            <!-- Đợt 1 -> 8 Status Toggles -->
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_1 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="1" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_1 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_1 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_2 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="2" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_2 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_2 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_3 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="3" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_3 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_3 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_4 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="4" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_4 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_4 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_5 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="5" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_5 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_5 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_6 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="6" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_6 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_6 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_7 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="7" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_7 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_7 }}
+                </span>
+            </td>
+            <td class="text-center">
+                <span class="badge payment-toggle-badge {% if s.dot_8 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
+                      data-student-id="{{ s.id }}" data-period="8" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                    <i class="fas {% if s.dot_8 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
+                    {{ s.dot_8 }}
+                </span>
+            </td>
+            
+            <td class="text-center no-export">
+              <div class="d-flex justify-content-center gap-1">
                 <a href="{% url 'student_detail' s.id %}" class="btn btn-outline-primary btn-xs" title="Chi tiết">
                   <i class="fas fa-eye"></i>
                 </a>
@@ -141,7 +208,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="4" class="text-center py-5" style="color:#94A3B8;">
+            <td colspan="12" class="text-center py-5" style="color:#94A3B8;">
               <i class="fas fa-search fa-2x mb-2 d-block" style="color:#E2E8F0;"></i>
               Không tìm thấy học sinh phù hợp
             </td>
@@ -152,10 +219,150 @@
     </div>
   </div>
 </div>
+
+<!-- Receipt Preview Modal -->
+<div class="modal fade" id="receiptModal" tabindex="-1" aria-labelledby="receiptModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content rounded-4 border-0 shadow">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold text-dark" id="receiptModalLabel">
+          <i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Biên lai thu học phí
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-0" style="height: 500px;">
+        <iframe id="receipt-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
+      </div>
+      <div class="modal-footer border-top d-flex justify-content-between p-3">
+        <button type="button" class="btn btn-outline-danger rounded-3 btn-sm" id="btn-cancel-payment">
+          <i class="fas fa-undo me-1"></i> Hủy đóng học phí
+        </button>
+        <div>
+          <a href="" id="btn-download-receipt" class="btn btn-success btn-sm rounded-3 me-2" target="_blank">
+            <i class="fas fa-download me-1"></i> Tải PDF
+          </a>
+          <button type="button" class="btn btn-secondary btn-sm rounded-3" data-bs-dismiss="modal">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock content %}
 
 {% block js %}
 <script>
+  function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+          const cookies = document.cookie.split(';');
+          for (let i = 0; i < cookies.length; i++) {
+              const cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                  break;
+              }
+          }
+      }
+      return cookieValue;
+  }
+  const csrftoken = getCookie('csrftoken');
+  const lang = '{{ request.LANGUAGE_CODE|default:"en" }}';
+
+  let currentStudentId = null;
+  let currentPeriodNum = null;
+  let currentBadgeElement = null;
+  let receiptModal = null;
+
+  document.addEventListener("DOMContentLoaded", function() {
+      const modalEl = document.getElementById('receiptModal');
+      if (modalEl) {
+          receiptModal = new bootstrap.Modal(modalEl);
+      }
+
+      document.querySelectorAll('.payment-toggle-badge').forEach(badge => {
+          badge.addEventListener('click', function() {
+              const studentId = this.getAttribute('data-student-id');
+              const periodNum = this.getAttribute('data-period');
+              const isPaid = this.classList.contains('bg-success');
+              
+              if (isPaid) {
+                  currentStudentId = studentId;
+                  currentPeriodNum = periodNum;
+                  currentBadgeElement = this;
+                  
+                  this.style.opacity = '0.5';
+                  fetch(`/${lang}/api/students/${studentId}/period/${periodNum}/receipt-url/`)
+                      .then(res => res.json())
+                      .then(data => {
+                          this.style.opacity = '1';
+                          if (data.success) {
+                              document.getElementById('receipt-iframe').src = data.receipt_url;
+                              document.getElementById('btn-download-receipt').href = data.receipt_url;
+                              if (receiptModal) {
+                                  receiptModal.show();
+                              }
+                          } else {
+                              alert("Lỗi: " + (data.error || "Không thể tải biên lai"));
+                          }
+                      })
+                      .catch(err => {
+                          this.style.opacity = '1';
+                          console.error(err);
+                          alert("Lỗi kết nối máy chủ khi lấy biên lai!");
+                      });
+              } else {
+                  this.style.opacity = '0.5';
+                  togglePaymentStatus(studentId, periodNum, this);
+              }
+          });
+      });
+
+      const cancelPaymentBtn = document.getElementById('btn-cancel-payment');
+      if (cancelPaymentBtn) {
+          cancelPaymentBtn.addEventListener('click', function() {
+              if (confirm("Bạn có chắc chắn muốn hủy đóng học phí đợt này? Biên lai cũ sẽ bị xóa hoàn toàn.")) {
+                  if (receiptModal) {
+                      receiptModal.hide();
+                  }
+                  if (currentBadgeElement && currentStudentId && currentPeriodNum) {
+                      currentBadgeElement.style.opacity = '0.5';
+                      togglePaymentStatus(currentStudentId, currentPeriodNum, currentBadgeElement);
+                  }
+              }
+          });
+      }
+  });
+
+  function togglePaymentStatus(studentId, periodNum, badgeElement) {
+      fetch(`/${lang}/api/students/${studentId}/toggle-period/${periodNum}/`, {
+          method: 'POST',
+          headers: {
+              'X-CSRFToken': csrftoken,
+              'Content-Type': 'application/json'
+          }
+      })
+      .then(response => response.json())
+      .then(data => {
+          badgeElement.style.opacity = '1';
+          if (data.success) {
+              if (data.new_status === 'Đã đóng') {
+                  badgeElement.className = "badge payment-toggle-badge bg-success text-white";
+                  badgeElement.innerHTML = `<i class="fas fa-check-circle me-1"></i>Đã đóng`;
+              } else {
+                  badgeElement.className = "badge payment-toggle-badge bg-light text-secondary border";
+                  badgeElement.innerHTML = `<i class="fas fa-clock me-1"></i>Chưa đóng`;
+              }
+          } else {
+              alert("Lỗi: " + (data.error || "Không xác định"));
+          }
+      })
+      .catch(err => {
+          badgeElement.style.opacity = '1';
+          console.error(err);
+          alert("Lỗi kết nối máy chủ!");
+      });
+  }
+
   function exportToCSV() {
     const csv = [];
     const rows = document.querySelectorAll("#student-excel-table tr");
@@ -180,3 +387,4 @@
   }
 </script>
 {% endblock js %}
+

@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block title %}Import học sinh từ Excel/CSV | {{ classroom.name }}{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+<div class="row justify-content-center mt-3">
+    <div class="col-12 col-md-10 col-lg-8">
+        <div class="card border-0 shadow-sm rounded-4 p-4">
+            <h4 class="fw-bold text-dark mb-2 text-center">Import danh sách học sinh từ Excel/CSV</h4>
+            <p class="text-secondary text-center small mb-4">Lớp học hiện tại: <span class="fw-bold text-dark">{{ classroom.name }}</span></p>
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-4" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Instructions Box -->
+            <div class="card bg-light border-0 rounded-4 p-4 mb-4">
+                <h5 class="fw-bold text-dark mb-3"><i class="fas fa-info-circle text-primary me-2"></i>Hướng dẫn chuẩn bị File</h5>
+                <ol class="text-secondary small mb-3 ps-3">
+                    <li class="mb-2">Hệ thống chấp nhận tệp định dạng **Excel (.xlsx)** hoặc **CSV (.csv)** (mã hóa UTF-8).</li>
+                    <li class="mb-2">File tải lên cần chứa các cột bắt buộc sau (tiêu đề cột không phân biệt hoa thường, thứ tự cột có thể thay đổi tùy ý):
+                        <ul>
+                            <li>**Tên**: Họ và tên học sinh (bắt buộc)</li>
+                            <li>**SĐT**: Số điện thoại liên hệ (bắt buộc)</li>
+                            <li>**Lớp**: Tên lớp học, ví dụ: `{{ classroom.name }}` (bắt buộc)</li>
+                            <li>**Ngày nhập học**: Ngày bắt đầu học của học sinh (tùy chọn, có thể ghi là *Ngày bắt đầu*, định dạng ngày tháng như `15/07/2026` hoặc `2026-07-15`)</li>
+                            <li>**STT** (Số thứ tự): Cột này **không bắt buộc**. Sau khi nhập vào, hệ thống sẽ tự động hiển thị số thứ tự (STT) của học sinh.</li>
+                        </ul>
+                    </li>
+                    <li class="mb-2">Hệ thống sẽ **tự động khởi tạo 8 đợt đóng học phí mặc định** (tất cả đều là *Chưa đóng*) cho từng học sinh.</li>
+                    <li class="mb-2">Tên học sinh và tên lớp học sẽ được hệ thống chuẩn hóa viết hoa chữ cái đầu tự động.</li>
+                </ol>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm small mb-0 bg-white text-center">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tên</th>
+                                <th>SĐT</th>
+                                <th>Lớp</th>
+                                <th>Ngày nhập học</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Nguyễn Văn A</td>
+                                <td>0912345678</td>
+                                <td>{{ classroom.name }}</td>
+                                <td>15/07/2026</td>
+                            </tr>
+                            <tr>
+                                <td>Trần Thị B</td>
+                                <td>0987654321</td>
+                                <td>{{ classroom.name }}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Upload Form -->
+            <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                {% csrf_token %}
+                
+                <div class="mb-4">
+                    <label for="excel_file" class="form-label fw-bold text-dark">Chọn file từ máy tính của bạn:</label>
+                    <input type="file" name="excel_file" id="excel_file" class="form-control rounded-3" accept=".xlsx, .xls, .csv" required>
+                    <div class="form-text text-muted">Chấp nhận tệp định dạng .xlsx, .xls hoặc .csv</div>
+                </div>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'classroom_detail' classroom.id %}" class="btn btn-outline-secondary px-4 rounded-3">
+                        <i class="fas fa-arrow-left me-2"></i>Hủy bỏ
+                    </a>
+                    <button type="submit" class="btn btn-success px-4 rounded-3">
+                        <i class="fas fa-upload me-2"></i>Bắt đầu Import học sinh
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}

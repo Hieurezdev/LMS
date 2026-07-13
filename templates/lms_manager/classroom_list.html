@@ -88,10 +88,11 @@
             <thead>
                 <tr>
                     <th style="width: 10%;">Mã Lớp (ID)</th>
-                    <th style="width: 30%;">Tên Lớp học</th>
+                    <th style="width: 25%;">Tên Lớp học</th>
+                    <th style="width: 20%;">Giảng viên dạy</th>
                     <th style="width: 15%; text-align: center;">Sĩ số học sinh</th>
-                    <th style="width: 15%; text-align: center;">Số môn học</th>
-                    <th style="width: 20%; text-align: right;">Tổng học phí đã thu</th>
+                    <th style="width: 10%; text-align: center;">Số môn học</th>
+                    <th style="width: 15%; text-align: right;">Tổng học phí đã thu</th>
                     <th style="width: 10%; text-align: right;" class="no-export">Hành động</th>
                 </tr>
             </thead>
@@ -104,6 +105,7 @@
                                 <i class="fas fa-school me-2 text-secondary"></i>{{ item.classroom.name }}
                             </a>
                         </td>
+                        <td class="text-secondary fw-semibold">{{ item.teachers_names|default:"-" }}</td>
                         <td style="text-align: center;">{{ item.student_count }} học sinh</td>
                         <td style="text-align: center;">{{ item.subject_count }} môn</td>
                         <td style="text-align: right;" class="fw-bold text-success">

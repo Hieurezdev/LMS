@@ -83,18 +83,24 @@
     document.addEventListener("DOMContentLoaded", function() {
         const subjectSelect = document.getElementById("id_subject");
         const teacherSelect = document.getElementById("id_teacher");
+        const classroomSelect = document.getElementById("id_classroom");
 
-        if (subjectSelect && teacherSelect) {
-            function loadTeachers() {
+        if (subjectSelect && teacherSelect && classroomSelect) {
+            // Store the initial selected values from Django template if any
+            let initialTeacherVal = "{{ form.initial.teacher.id|default:'' }}" || teacherSelect.value;
+            let initialClassroomVal = "{{ form.initial.classroom.id|default:'' }}" || classroomSelect.value;
+
+            function loadTeachers(callback) {
                 const subjectId = subjectSelect.value;
                 if (!subjectId) {
                     teacherSelect.innerHTML = '<option value="">---------</option>';
+                    classroomSelect.innerHTML = '<option value="">---------</option>';
                     return;
                 }
 
                 let urlPattern = "{% url 'api_subject_teachers' subject_id=999999 %}";
                 let url = urlPattern.replace("999999", subjectId);
-                const currentVal = teacherSelect.value;
+                const currentVal = teacherSelect.value || initialTeacherVal;
 
                 fetch(url)
                     .then(response => response.json())
@@ -105,18 +111,62 @@
                             options += `<option value="${t.id}" ${selected}>${t.name}</option>`;
                         });
                         teacherSelect.innerHTML = options;
+                        initialTeacherVal = ""; // clear after first run
+                        
+                        if (callback) {
+                            callback();
+                        } else {
+                            loadClassrooms();
+                        }
                     })
                     .catch(err => {
                         console.error("Lỗi tải giảng viên:", err);
                     });
             }
 
-            // Bind change event
-            subjectSelect.addEventListener("change", loadTeachers);
+            function loadClassrooms() {
+                const teacherId = teacherSelect.value || initialTeacherVal;
+                if (!teacherId) {
+                    classroomSelect.innerHTML = '<option value="">---------</option>';
+                    return;
+                }
 
-            // Trigger initially if subject is already selected
+                let url = `/en/api/teachers/${teacherId}/classes/`;
+                const currentVal = classroomSelect.value || initialClassroomVal;
+
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        let options = '<option value="">Chọn lớp học</option>';
+                        data.classrooms.forEach(c => {
+                            let selected = (c.id == currentVal) ? 'selected' : '';
+                            options += `<option value="${c.id}" ${selected}>${c.name}</option>`;
+                        });
+                        classroomSelect.innerHTML = options;
+                        initialClassroomVal = ""; // clear after first run
+                    })
+                    .catch(err => {
+                        console.error("Lỗi tải lớp học:", err);
+                    });
+            }
+
+            // Bind change events
+            subjectSelect.addEventListener("change", function() {
+                loadTeachers(function() {
+                    loadClassrooms();
+                });
+            });
+            teacherSelect.addEventListener("change", loadClassrooms);
+
+            // Trigger initial loading if subject is already selected
             if (subjectSelect.value) {
-                loadTeachers();
+                loadTeachers(function() {
+                    loadClassrooms();
+                });
+            } else {
+                // If no subject, reset choices
+                teacherSelect.innerHTML = '<option value="">---------</option>';
+                classroomSelect.innerHTML = '<option value="">---------</option>';
             }
         }
     });

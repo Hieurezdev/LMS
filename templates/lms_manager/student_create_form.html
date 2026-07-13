@@ -22,11 +22,14 @@
 
             <form method="POST" novalidate>
                 {% csrf_token %}
+                {% if next %}
+                    <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
                 
                 {{ form|crispy }}
                 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="{% url 'student_list' %}" class="btn btn-outline-secondary px-4 rounded-3">
+                    <a href="{% if next %}{{ next }}{% else %}{% url 'student_list' %}{% endif %}" class="btn btn-outline-secondary px-4 rounded-3">
                         <i class="fas fa-arrow-left me-2"></i>Quay lại
                     </a>
                     <button type="submit" class="btn btn-primary px-4 rounded-3">
@@ -42,42 +45,68 @@
 {% block js %}
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        const subjectSelect = document.getElementById("id_subject");
         const teacherSelect = document.getElementById("id_teacher");
+        const subjectSelect = document.getElementById("id_subject");
+        const classroomSelect = document.getElementById("id_classroom");
 
-        if (subjectSelect && teacherSelect) {
-            function loadTeachers() {
-                const subjectId = subjectSelect.value;
-                if (!subjectId) {
-                    teacherSelect.innerHTML = '<option value="">Chọn giảng viên dạy (Tùy chọn)</option>';
+        if (teacherSelect && subjectSelect && classroomSelect) {
+            // Keep track of initial loaded values (e.g. from validation error redirect)
+            let initialSubjectVal = "{{ form.initial.subject.id|default:'' }}" || subjectSelect.value;
+            let initialClassroomVal = "{{ form.initial.classroom.id|default:'' }}" || classroomSelect.value;
+
+            function loadSubjectsAndClasses() {
+                const teacherId = teacherSelect.value;
+                if (!teacherId) {
+                    subjectSelect.innerHTML = '<option value="">---------</option>';
+                    classroomSelect.innerHTML = '<option value="">---------</option>';
                     return;
                 }
 
-                let urlPattern = "{% url 'api_subject_teachers' subject_id=999999 %}";
-                let url = urlPattern.replace("999999", subjectId);
-                const currentVal = teacherSelect.value;
-
-                fetch(url)
+                // 1. Fetch and populate subjects
+                const subjectsUrl = `/en/api/teachers/${teacherId}/subjects/`;
+                fetch(subjectsUrl)
                     .then(response => response.json())
                     .then(data => {
-                        let options = '<option value="">Chọn giảng viên dạy (Tùy chọn)</option>';
-                        data.teachers.forEach(t => {
-                            let selected = (t.id == currentVal) ? 'selected' : '';
-                            options += `<option value="${t.id}" ${selected}>${t.name}</option>`;
+                        let options = '<option value="">Chọn môn học</option>';
+                        data.subjects.forEach(s => {
+                            let selected = (s.id == initialSubjectVal || s.id == subjectSelect.value) ? 'selected' : '';
+                            options += `<option value="${s.id}" ${selected}>${s.name}</option>`;
                         });
-                        teacherSelect.innerHTML = options;
+                        subjectSelect.innerHTML = options;
+                        initialSubjectVal = ""; // clear after first run
                     })
                     .catch(err => {
-                        console.error("Lỗi tải giảng viên:", err);
+                        console.error("Lỗi tải môn học của giáo viên:", err);
+                    });
+
+                // 2. Fetch and populate classrooms
+                const classesUrl = `/en/api/teachers/${teacherId}/classes/`;
+                fetch(classesUrl)
+                    .then(response => response.json())
+                    .then(data => {
+                        let options = '<option value="">Chọn lớp học</option>';
+                        data.classrooms.forEach(c => {
+                            let selected = (c.id == initialClassroomVal || c.id == classroomSelect.value) ? 'selected' : '';
+                            options += `<option value="${c.id}" ${selected}>${c.name}</option>`;
+                        });
+                        classroomSelect.innerHTML = options;
+                        initialClassroomVal = ""; // clear after first run
+                    })
+                    .catch(err => {
+                        console.error("Lỗi tải lớp học của giáo viên:", err);
                     });
             }
 
-            // Listen for changes on subject choice
-            subjectSelect.addEventListener("change", loadTeachers);
+            // Bind change event to teacher select
+            teacherSelect.addEventListener("change", loadSubjectsAndClasses);
 
-            // Execute initially if value exists (e.g. form validation error)
-            if (subjectSelect.value) {
-                loadTeachers();
+            // Execute initially if teacher is already selected (e.g. initial or error state)
+            if (teacherSelect.value) {
+                loadSubjectsAndClasses();
+            } else {
+                // Initialize with empty options if no teacher selected
+                subjectSelect.innerHTML = '<option value="">Chọn giảng viên trước</option>';
+                classroomSelect.innerHTML = '<option value="">Chọn giảng viên trước</option>';
             }
         }
     });

@@ -61,12 +61,6 @@
 
     <div class="sidebar-section-label">Học phí</div>
     <ul>
-      <li class="{% if 'periods' in request.path %}active{% endif %}">
-        <a href="{% url 'payment_period_list' %}">
-          <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span>
-          <span>Đợt đóng tiền</span>
-        </a>
-      </li>
       <li class="{% if request.resolver_match.url_name == 'payment_list' or request.resolver_match.url_name == 'payment_receipt' %}active{% endif %}">
         <a href="{% url 'payment_list' %}">
           <span class="nav-icon"><i class="fas fa-wallet"></i></span>

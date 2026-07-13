@@ -24,7 +24,11 @@
         <p>
           <i class="fas fa-school" style="color:#4F6EF7;font-size:12px;"></i>
           Lớp:
+          {% if classroom %}
           <a href="{% url 'classroom_detail' classroom.id %}" style="color:#4F6EF7;font-weight:600;">{{ classroom.name }}</a>
+          {% else %}
+          <span style="color:#64748B;font-weight:600;">Không có lớp</span>
+          {% endif %}
           {% if student.phone %}
           &nbsp;·&nbsp;
           <span style="color:#64748B;font-weight:500;"><i class="fas fa-phone-alt" style="font-size:11px;color:#64748B;"></i> {{ student.phone }}</span>
@@ -147,7 +151,10 @@
                       <a href="{% url 'payment_receipt' r.payment_id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="In biên lai">
                         <i class="fas fa-print"></i>
                       </a>
-                      <a href="{% url 'payment_delete' r.payment_id %}" class="btn btn-outline-danger btn-xs" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
+                      <a href="{% url 'payment_edit' r.payment_id %}" class="btn btn-outline-warning btn-xs text-dark" title="Chỉnh sửa">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      <a href="{% url 'payment_delete' r.payment_id %}?next={{ request.path|urlencode }}" class="btn btn-outline-danger btn-xs" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
                         <i class="fas fa-trash-alt"></i>
                       </a>
                     </div>

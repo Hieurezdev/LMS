@@ -25,13 +25,17 @@ def link_callback(uri, rel):
 
 
 class ClassRoom(models.Model):
-    name = models.CharField(max_length=100, unique=True, verbose_name="Tên lớp")
+    name = models.CharField(max_length=150, verbose_name="Tên lớp")
 
     class Meta:
         verbose_name = "Lớp học"
         verbose_name_plural = "Lớp học"
 
     def __str__(self):
+        teachers = self.teachers.all()
+        if teachers.exists():
+            teacher_names = ", ".join(t.name for t in teachers)
+            return f"{self.name} (GV: {teacher_names})"
         return self.name
 
     def save(self, *args, **kwargs):
@@ -103,9 +107,24 @@ class Teacher(models.Model):
 
 
 class Student(models.Model):
+    STATUS_CHOICES = [
+        ('Chưa đóng', 'Chưa đóng'),
+        ('Đã đóng', 'Đã đóng'),
+    ]
     name = models.CharField(max_length=150, verbose_name="Tên học sinh")
     phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Số điện thoại")
-    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="students", verbose_name="Lớp")
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="students", null=True, blank=True, verbose_name="Lớp")
+    start_date = models.DateField(blank=True, null=True, verbose_name="Ngày bắt đầu học")
+    
+    dot_1 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 1")
+    dot_2 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 2")
+    dot_3 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 3")
+    dot_4 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 4")
+    dot_5 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 5")
+    dot_6 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 6")
+    dot_7 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 7")
+    dot_8 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 8")
+
 
     class Meta:
         verbose_name = "Học sinh"

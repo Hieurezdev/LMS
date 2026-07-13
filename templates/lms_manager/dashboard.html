@@ -20,9 +20,6 @@
         <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
             <div class="d-flex align-items-center flex-wrap gap-2">
                 <span class="fw-bold text-secondary me-2"><i class="fas fa-bolt text-warning me-1"></i>Thao tác nhanh:</span>
-                <a href="{% url 'classroom_add' %}" class="btn btn-outline-primary rounded-3 btn-sm px-3">
-                    <i class="fas fa-plus me-1"></i> Thêm Lớp học
-                </a>
                 <a href="{% url 'student_add' %}" class="btn btn-outline-success rounded-3 btn-sm px-3">
                     <i class="fas fa-plus me-1"></i> Thêm Học sinh
                 </a>
@@ -31,9 +28,6 @@
                 </a>
                 <a href="{% url 'teacher_add' %}" class="btn btn-outline-warning text-dark rounded-3 btn-sm px-3">
                     <i class="fas fa-plus me-1"></i> Thêm Giảng viên
-                </a>
-                <a href="{% url 'payment_period_add' %}" class="btn btn-outline-secondary rounded-3 btn-sm px-3">
-                    <i class="fas fa-plus me-1"></i> Thêm Đợt đóng tiền
                 </a>
                 <a href="{% url 'payment_add' %}" class="btn btn-success rounded-3 btn-sm px-3">
                     <i class="fas fa-wallet me-1"></i> Đóng học phí
@@ -136,36 +130,49 @@
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="fw-bold text-dark mb-0">
-                    <i class="fas fa-bell text-danger me-1"></i>Các khoản chưa đóng gần đây
+                    <i class="fas fa-exclamation-circle text-danger me-1"></i>Học sinh nợ học phí từ 2 đợt trở lên
                 </h6>
-                {% if debt_total_count > 0 %}
-                <a href="{% url 'debt_dashboard' %}" class="btn btn-sm btn-outline-danger rounded-3">
-                    Xem tất cả <i class="fas fa-arrow-right ms-1"></i>
-                </a>
-                {% endif %}
+                <span class="badge bg-danger bg-opacity-10 text-danger rounded-3" style="font-size:11px;">
+                    {{ overdue_students|length }} học sinh
+                </span>
             </div>
             <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
                 <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th>Học sinh</th>
+                            <th>Môn học (Giảng viên)</th>
+                            <th class="text-center">Chi tiết nợ</th>
+                            <th class="text-end">Hành động</th>
+                        </tr>
+                    </thead>
                     <tbody>
-                        {% for r in debt_rows %}
-                            <tr>
+                        {% for r in overdue_students %}
+                            <tr class="align-middle">
                                 <td class="fw-semibold">
-                                    <a href="{% url 'student_detail' r.student.id %}" class="text-decoration-none text-dark">
+                                    <a href="{% url 'student_detail' r.student.id %}" class="text-decoration-none text-dark d-block">
                                         {{ r.student.name }}
                                     </a>
-                                    <span class="text-muted small ms-1">- {{ r.classroom.name }}</span>
+                                    <span class="text-muted small" style="font-size:11px;">Lớp: {{ r.classroom.name }}</span>
                                 </td>
-                                <td class="small text-secondary">{{ r.subject.name }} <span class="text-muted">({{ r.teacher.name }})</span></td>
+                                <td class="small text-secondary" style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                    {{ r.subjects }}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge bg-danger text-white rounded-pill px-2 py-1" style="font-size: 10.5px;" title="{{ r.periods_list }}">
+                                        Nợ {{ r.overdue_count }} đợt: {{ r.periods_list }}
+                                    </span>
+                                </td>
                                 <td class="text-end">
-                                    <a href="{% url 'payment_add' %}?student={{ r.student.id }}&period={{ r.period.id }}" class="btn btn-xs btn-success rounded-3 py-0 px-2">
+                                    <a href="{% url 'payment_add' %}?student={{ r.student.id }}" class="btn btn-xs btn-success rounded-3 py-0.5 px-2">
                                         <i class="fas fa-wallet"></i> Thu
                                     </a>
                                 </td>
                             </tr>
                         {% empty %}
                             <tr>
-                                <td class="text-center text-success py-3">
-                                    <i class="fas fa-check-circle me-1"></i>Tuyệt vời! Tất cả học sinh đã đóng đủ.
+                                <td colspan="4" class="text-center text-success py-3 small">
+                                    <i class="fas fa-check-circle me-1"></i>Tuyệt vời! Không có học sinh nào nợ từ 2 đợt trở lên.
                                 </td>
                             </tr>
                         {% endfor %}

@@ -30,16 +30,6 @@ class TeacherForm(forms.ModelForm):
             'autocomplete': 'off'
         })
     )
-    class_names = forms.CharField(
-        label="Lớp giảng dạy (Nhập tên)",
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Nhập tên các lớp, cách nhau bằng dấu phẩy (ví dụ: 10A1, 11B2)...',
-            'id': 'id_class_names',
-            'list': 'classroom-list',
-            'autocomplete': 'off'
-        })
-    )
 
     class Meta:
         model = Teacher
@@ -50,7 +40,14 @@ class TeacherForm(forms.ModelForm):
         }
 
 
+
 class StudentForm(forms.ModelForm):
+    classroom = forms.ModelChoiceField(
+        queryset=ClassRoom.objects.all(),
+        required=False,
+        label="Lớp học",
+        widget=forms.Select(attrs={'class': 'form-control form-select', 'id': 'id_classroom'})
+    )
     subject = forms.ModelChoiceField(
         queryset=Subject.objects.all(),
         required=False,
@@ -66,15 +63,41 @@ class StudentForm(forms.ModelForm):
 
     class Meta:
         model = Student
-        fields = ['name', 'phone', 'classroom']
+        fields = ['name', 'phone', 'classroom', 'start_date']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Tên học sinh'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Số điện thoại (tùy chọn)'}),
-            'classroom': forms.Select(attrs={'class': 'form-control form-select'}),
+            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
+
+    field_order = ['name', 'phone', 'start_date', 'teacher', 'subject', 'classroom']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            # Creation mode
+            self.fields['teacher'].required = True
+            self.fields['subject'].required = True
+            self.fields['classroom'].required = True
+            self.fields['teacher'].label = "Giảng viên đăng ký học"
+            self.fields['subject'].label = "Môn học đăng ký"
+            self.fields['classroom'].label = "Lớp học"
+        else:
+            # Edit mode: remove teacher and subject fields as they are only for enrollment
+            if 'teacher' in self.fields:
+                del self.fields['teacher']
+            if 'subject' in self.fields:
+                del self.fields['subject']
 
 
 class EnrollmentForm(forms.ModelForm):
+    classroom = forms.ModelChoiceField(
+        queryset=ClassRoom.objects.all(),
+        required=True,
+        label="Lớp học",
+        widget=forms.Select(attrs={'class': 'form-control form-select', 'id': 'id_classroom'})
+    )
+
     class Meta:
         model = Enrollment
         fields = ['student', 'subject', 'teacher']
@@ -113,16 +136,23 @@ class PaymentForm(forms.ModelForm):
             'autocomplete': 'off'
         })
     )
+    payment_period = forms.CharField(
+        label="Đợt đóng tiền",
+        widget=forms.Select(attrs={'class': 'form-control form-select', 'id': 'id_payment_period'})
+    )
 
     class Meta:
         model = Payment
-        fields = ['teacher', 'payment_period', 'amount', 'payment_date']
+        fields = ['teacher', 'amount', 'payment_date']
         widgets = {
             'teacher': forms.Select(attrs={'class': 'form-control form-select', 'id': 'id_teacher'}),
-            'payment_period': forms.Select(attrs={'class': 'form-control form-select', 'id': 'id_payment_period'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Nhập số tiền đóng (VNĐ)'}),
             'payment_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
+
+    field_order = ['student_name', 'teacher', 'payment_period', 'amount', 'payment_date']
+
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

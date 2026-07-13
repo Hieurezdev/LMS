@@ -18,10 +18,33 @@
                 {% endfor %}
             {% endif %}
 
-            <form method="POST" novalidate>
+            <form method="POST" novalidate id="teacher-form">
                 {% csrf_token %}
                 
                 {{ form|crispy }}
+                
+                <!-- Custom dynamic classrooms list management -->
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-dark"><i class="fas fa-school me-2 text-primary"></i>Danh sách lớp giảng dạy</label>
+                    <div id="classroom-list-wrapper" class="border rounded-3 p-3 bg-light mb-3">
+                        <div id="classroom-items-container" class="d-flex flex-column gap-2">
+                            <!-- Dynamically populated via JS -->
+                        </div>
+                        <div id="no-classes-msg" class="text-center text-secondary py-2 small">
+                            Chưa chọn lớp nào.
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <input type="text" id="new-classroom-input" class="form-control" placeholder="Nhập tên lớp mới hoặc chọn..." list="classroom-list" autocomplete="off">
+                        <button type="button" class="btn btn-outline-primary" id="btn-add-classroom">
+                            <i class="fas fa-plus me-1"></i>Thêm lớp
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Hidden inputs to submit serialized data -->
+                <input type="hidden" name="classes_json" id="classes-json-input" value="[]">
                 
                 <!-- Datalist for subject name autocomplete -->
                 <datalist id="subject-list">
@@ -33,7 +56,7 @@
                 <!-- Datalist for classroom name autocomplete -->
                 <datalist id="classroom-list">
                     {% for cls in existing_classrooms %}
-                        <option value="{{ cls.name }}">
+                        <option value="{{ cls.name }}" data-id="{{ cls.id }}">
                     {% endfor %}
                 </datalist>
                 
@@ -50,3 +73,119 @@
     </div>
 </div>
 {% endblock content %}
+
+{% block js %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const initialClasses = JSON.parse('{{ initial_classes_json|default:"[]"|escapejs }}' || '[]');
+        const container = document.getElementById("classroom-items-container");
+        const noMsg = document.getElementById("no-classes-msg");
+        const newClassInput = document.getElementById("new-classroom-input");
+        const btnAdd = document.getElementById("btn-add-classroom");
+        const hiddenInput = document.getElementById("classes-json-input");
+        
+        let classList = [...initialClasses];
+        
+        // Helper to capitalization/smart format matching backend
+        function formatClassName(name) {
+            return name.split(/\s+/).map(word => {
+                if (word.length <= 4 && /\d/.test(word)) {
+                    return word.toUpperCase();
+                }
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }).join(' ');
+        }
+        
+        function renderClassList() {
+            container.innerHTML = "";
+            if (classList.length === 0) {
+                noMsg.style.display = "block";
+            } else {
+                noMsg.style.display = "none";
+                classList.forEach((item, index) => {
+                    const div = document.createElement("div");
+                    div.className = "d-flex gap-2 align-items-center bg-white border p-2 rounded-3 shadow-sm";
+                    div.innerHTML = `
+                        <input type="text" class="form-control form-control-sm class-name-edit" data-index="${index}" value="${item.name}" style="font-weight: 500;">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remove-class" data-index="${index}">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+            hiddenInput.value = JSON.stringify(classList);
+        }
+        
+        // Handle adding a class
+        btnAdd.addEventListener("click", function() {
+            let nameVal = newClassInput.value.trim();
+            if (!nameVal) return;
+            
+            // Format first
+            nameVal = formatClassName(nameVal);
+            
+            // Check duplicate
+            if (classList.some(item => item.name.toLowerCase() === nameVal.toLowerCase())) {
+                alert("Lớp học này đã có trong danh sách!");
+                return;
+            }
+            
+            // Lookup ID from datalist
+            const option = Array.from(document.querySelectorAll('#classroom-list option')).find(opt => opt.value.toLowerCase() === nameVal.toLowerCase());
+            const id = option ? parseInt(option.getAttribute('data-id')) : null;
+            
+            classList.push({ id: id, name: nameVal });
+            newClassInput.value = "";
+            renderClassList();
+        });
+        
+        // Add by pressing Enter
+        newClassInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                btnAdd.click();
+            }
+        });
+        
+        // Handle inline editing and deletion
+        container.addEventListener("input", function(e) {
+            if (e.target.classList.contains("class-name-edit")) {
+                const index = parseInt(e.target.getAttribute("data-index"));
+                classList[index].name = e.target.value;
+                hiddenInput.value = JSON.stringify(classList);
+            }
+        });
+        
+        container.addEventListener("click", function(e) {
+            const btn = e.target.closest(".btn-remove-class");
+            if (btn) {
+                const index = parseInt(btn.getAttribute("data-index"));
+                classList.splice(index, 1);
+                renderClassList();
+            }
+        });
+
+        // Auto-add classroom name if left in input on form submit
+        const formEl = document.getElementById("teacher-form");
+        if (formEl) {
+            formEl.addEventListener("submit", function() {
+                let nameVal = newClassInput.value.trim();
+                if (nameVal) {
+                    nameVal = formatClassName(nameVal);
+                    if (!classList.some(item => item.name.toLowerCase() === nameVal.toLowerCase())) {
+                        const option = Array.from(document.querySelectorAll('#classroom-list option')).find(opt => opt.value.toLowerCase() === nameVal.toLowerCase());
+                        const id = option ? parseInt(option.getAttribute('data-id')) : null;
+                        classList.push({ id: id, name: nameVal });
+                    }
+                    newClassInput.value = "";
+                    renderClassList();
+                }
+            });
+        }
+        
+        renderClassList();
+    });
+</script>
+{% endblock js %}
+

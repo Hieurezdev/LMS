@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load crispy_forms_tags %}
 
-{% block title %}Ghi nhận đóng học phí{% endblock title %}
+{% block title %}Chỉnh sửa đợt đóng học phí{% endblock title %}
 
 {% block content %}
 <div class="container-fluid pt-3">
@@ -9,7 +9,7 @@
 <div class="row justify-content-center mt-3">
     <div class="col-12 col-md-8 col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 p-4">
-            <h4 class="fw-bold text-dark mb-4 text-center">Ghi nhận đóng học phí</h4>
+            <h4 class="fw-bold text-dark mb-4 text-center">Chỉnh sửa đợt đóng học phí</h4>
             
             {% if messages %}
                 {% for message in messages %}
@@ -33,11 +33,11 @@
                 </datalist>
                 
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="{% url 'payment_list' %}" class="btn btn-outline-secondary px-4 rounded-3">
+                    <a href="{% if payment.student %}{% url 'student_detail' payment.student.id %}{% else %}{% url 'payment_list' %}{% endif %}" class="btn btn-outline-secondary px-4 rounded-3">
                         <i class="fas fa-arrow-left me-2"></i>Quay lại
                     </a>
                     <button type="submit" class="btn btn-primary px-4 rounded-3">
-                        <i class="fas fa-save me-2"></i>Lưu giao dịch
+                        <i class="fas fa-save me-2"></i>Lưu thay đổi
                     </button>
                 </div>
             </form>
@@ -71,7 +71,6 @@
             return match ? match[1].trim() : val;
         }
 
-
         // Add Quick helper buttons for amount input
         if (amountInput) {
             const quickContainer = document.createElement("div");
@@ -100,38 +99,53 @@
             if (!studentId) {
                 return;
             }
-
+            
             fetch(`/${lang}/api/students/${studentId}/teachers/`)
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
-                    let options = '<option value="">Chọn giảng viên</option>';
+                    const currentVal = teacherSelect.value;
+                    teacherSelect.innerHTML = "";
                     data.teachers.forEach(t => {
-                        options += `<option value="${t.id}">${t.name}</option>`;
+                        const opt = document.createElement("option");
+                        opt.value = t.id;
+                        opt.textContent = t.name;
+                        if (t.id.toString() === currentVal) {
+                            opt.selected = true;
+                        }
+                        teacherSelect.appendChild(opt);
                     });
-                    teacherSelect.innerHTML = options;
-                    periodSelect.innerHTML = '<option value="">Chọn đợt đóng tiền</option>';
+                    
+                    filterUnpaidPeriods();
                 })
-                .catch(err => console.error("Lỗi tải danh sách giảng viên:", err));
+                .catch(err => console.error("Lỗi tải giảng viên:", err));
         }
 
         function filterUnpaidPeriods() {
             const rawVal = studentNameInput.value.trim();
             const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
-            const teacherId = teacherSelect.value;
             
-            if (!studentId || !teacherId) {
-                periodSelect.innerHTML = '<option value="">Chọn đợt đóng tiền</option>';
-                return;
-            }
-
+            if (!studentId) return;
+            
             fetch(`/${lang}/api/students/${studentId}/unpaid-periods/`)
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
-                    let options = '<option value="">Chọn đợt đóng tiền</option>';
-                    data.periods.forEach(p => {
-                        options += `<option value="${p.id}">${p.name}</option>`;
-                    });
-                    periodSelect.innerHTML = options;
+                    const currentVal = periodSelect.value;
+                    periodSelect.innerHTML = "";
+                    
+                    // Always include the currently edited period first so it stays selectable
+                    const currentEditedVal = "{{ payment.payment_period.name|escapejs }}";
+                    const currentEditedNum = currentEditedVal.replace("Đợt ", "").trim();
+                    
+                    // Add all periods 1 to 8
+                    for (let i = 1; i <= 8; i++) {
+                        const opt = document.createElement("option");
+                        opt.value = i.toString();
+                        opt.textContent = `Đợt ${i}`;
+                        if (i.toString() === currentVal || `Đợt ${i}` === currentEditedVal) {
+                            opt.selected = true;
+                        }
+                        periodSelect.appendChild(opt);
+                    }
                 })
                 .catch(err => console.error("Lỗi tải đợt chưa đóng:", err));
         }
@@ -146,7 +160,6 @@
                 }
             });
             
-            // Execute initially if student is prefilled
             if (studentNameInput.value) {
                 const rawVal = studentNameInput.value.trim();
                 const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
@@ -159,65 +172,6 @@
         if (teacherSelect) {
             teacherSelect.addEventListener("change", filterUnpaidPeriods);
         }
-
-        const form = document.querySelector('form');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                // Open new tab immediately (synchronously, to bypass popup blocker)
-                const newTab = window.open('about:blank', '_blank');
-                
-                const submitBtn = form.querySelector('button[type="submit"]');
-                if (submitBtn) submitBtn.disabled = true;
-                
-                const formData = new FormData(form);
-                
-                fetch(form.action || window.location.href, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        // Redirect the new tab to the receipt PDF
-                        if (newTab) {
-                            newTab.location.href = data.receipt_url;
-                        }
-                        // Redirect main tab
-                        window.location.href = data.redirect_url;
-                    } else {
-                        if (submitBtn) submitBtn.disabled = false;
-                        // Close the opened tab since submission failed
-                        if (newTab) {
-                            newTab.close();
-                        }
-                        
-                        let errorMsg = "";
-                        for (const field in data.errors) {
-                            data.errors[field].forEach(err => {
-                                errorMsg += `${field}: ${err.message}\n`;
-                            });
-                        }
-                        alert("Lỗi nhập liệu:\n" + errorMsg);
-                    }
-                })
-                .catch(err => {
-                    if (submitBtn) submitBtn.disabled = false;
-                    if (newTab) {
-                        newTab.close();
-                    }
-                    console.error(err);
-                    alert("Lỗi kết nối máy chủ khi lưu thanh toán!");
-                });
-            });
-        }
     });
 </script>
 {% endblock js %}
-
-

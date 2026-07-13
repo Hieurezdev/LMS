@@ -25,7 +25,6 @@ class LMSManagerQueryTest(TestCase):
         
         self.payment_period = PaymentPeriod.objects.create(
             name="Period 1",
-            classroom=self.classroom,
             teacher=self.teacher,
             subject=self.subject
         )
@@ -43,7 +42,7 @@ class LMSManagerQueryTest(TestCase):
     def test_unpaid_enrollments_query(self):
         period = self.payment_period
         unpaid = Enrollment.objects.filter(
-            student__classroom=period.classroom,
+            student__classroom=self.classroom,
             subject=period.subject,
             teacher=period.teacher,
         ).exclude(
