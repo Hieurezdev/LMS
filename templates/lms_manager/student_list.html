@@ -2,6 +2,24 @@
 
 {% block title %}Danh sách học sinh{% endblock title %}
 
+{% block header %}
+{{ block.super }}
+<style>
+  .student-list-scroll {
+    max-height: 65vh;
+    min-height: 320px;
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+  .student-list-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #F8FAFC;
+  }
+</style>
+{% endblock header %}
+
 {% block content %}
 <div class="container-fluid pt-3">
   {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
@@ -77,7 +95,7 @@
       </div>
     </div>
 
-    <div class="table-responsive">
+    <div class="table-responsive student-list-scroll">
       <table class="lms-table table table-hover align-middle mb-0" id="student-excel-table" style="font-size: 13.5px;">
         <thead class="table-light text-center">
           <tr>
@@ -130,59 +148,59 @@
               {% if s.start_date %}{{ s.start_date|date:"d/m/Y" }}{% else %}-{% endif %}
             </td>
             
-            <!-- Đợt 1 -> 8 Status Toggles -->
+            <!-- Đợt 1 -> 8 payment statuses (updated only from payment records) -->
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_1 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="1" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_1 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_1 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_2 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="2" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_2 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_2 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_3 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="3" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_3 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_3 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_4 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="4" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_4 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_4 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_5 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="5" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_5 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_5 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_6 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="6" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_6 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_6 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_7 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="7" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_7 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_7 }}
                 </span>
             </td>
             <td class="text-center">
                 <span class="badge payment-toggle-badge {% if s.dot_8 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      data-student-id="{{ s.id }}" data-period="8" style="font-size: 11.5px; padding: 5px 8px; cursor: pointer; transition: all 0.2s ease-in-out;">
+                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
                     <i class="fas {% if s.dot_8 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
                     {{ s.dot_8 }}
                 </span>
@@ -220,149 +238,10 @@
   </div>
 </div>
 
-<!-- Receipt Preview Modal -->
-<div class="modal fade" id="receiptModal" tabindex="-1" aria-labelledby="receiptModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content rounded-4 border-0 shadow">
-      <div class="modal-header border-bottom">
-        <h5 class="modal-title fw-bold text-dark" id="receiptModalLabel">
-          <i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Biên lai thu học phí
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body p-0" style="height: 500px;">
-        <iframe id="receipt-iframe" src="" style="width: 100%; height: 100%; border: none;"></iframe>
-      </div>
-      <div class="modal-footer border-top d-flex justify-content-between p-3">
-        <button type="button" class="btn btn-outline-danger rounded-3 btn-sm" id="btn-cancel-payment">
-          <i class="fas fa-undo me-1"></i> Hủy đóng học phí
-        </button>
-        <div>
-          <a href="" id="btn-download-receipt" class="btn btn-success btn-sm rounded-3 me-2" target="_blank">
-            <i class="fas fa-download me-1"></i> Tải PDF
-          </a>
-          <button type="button" class="btn btn-secondary btn-sm rounded-3" data-bs-dismiss="modal">Đóng</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock content %}
 
 {% block js %}
 <script>
-  function getCookie(name) {
-      let cookieValue = null;
-      if (document.cookie && document.cookie !== '') {
-          const cookies = document.cookie.split(';');
-          for (let i = 0; i < cookies.length; i++) {
-              const cookie = cookies[i].trim();
-              if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                  cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                  break;
-              }
-          }
-      }
-      return cookieValue;
-  }
-  const csrftoken = getCookie('csrftoken');
-  const lang = '{{ request.LANGUAGE_CODE|default:"en" }}';
-
-  let currentStudentId = null;
-  let currentPeriodNum = null;
-  let currentBadgeElement = null;
-  let receiptModal = null;
-
-  document.addEventListener("DOMContentLoaded", function() {
-      const modalEl = document.getElementById('receiptModal');
-      if (modalEl) {
-          receiptModal = new bootstrap.Modal(modalEl);
-      }
-
-      document.querySelectorAll('.payment-toggle-badge').forEach(badge => {
-          badge.addEventListener('click', function() {
-              const studentId = this.getAttribute('data-student-id');
-              const periodNum = this.getAttribute('data-period');
-              const isPaid = this.classList.contains('bg-success');
-              
-              if (isPaid) {
-                  currentStudentId = studentId;
-                  currentPeriodNum = periodNum;
-                  currentBadgeElement = this;
-                  
-                  this.style.opacity = '0.5';
-                  fetch(`/${lang}/api/students/${studentId}/period/${periodNum}/receipt-url/`)
-                      .then(res => res.json())
-                      .then(data => {
-                          this.style.opacity = '1';
-                          if (data.success) {
-                              document.getElementById('receipt-iframe').src = data.receipt_url;
-                              document.getElementById('btn-download-receipt').href = data.receipt_url;
-                              if (receiptModal) {
-                                  receiptModal.show();
-                              }
-                          } else {
-                              alert("Lỗi: " + (data.error || "Không thể tải biên lai"));
-                          }
-                      })
-                      .catch(err => {
-                          this.style.opacity = '1';
-                          console.error(err);
-                          alert("Lỗi kết nối máy chủ khi lấy biên lai!");
-                      });
-              } else {
-                  this.style.opacity = '0.5';
-                  togglePaymentStatus(studentId, periodNum, this);
-              }
-          });
-      });
-
-      const cancelPaymentBtn = document.getElementById('btn-cancel-payment');
-      if (cancelPaymentBtn) {
-          cancelPaymentBtn.addEventListener('click', function() {
-              if (confirm("Bạn có chắc chắn muốn hủy đóng học phí đợt này? Biên lai cũ sẽ bị xóa hoàn toàn.")) {
-                  if (receiptModal) {
-                      receiptModal.hide();
-                  }
-                  if (currentBadgeElement && currentStudentId && currentPeriodNum) {
-                      currentBadgeElement.style.opacity = '0.5';
-                      togglePaymentStatus(currentStudentId, currentPeriodNum, currentBadgeElement);
-                  }
-              }
-          });
-      }
-  });
-
-  function togglePaymentStatus(studentId, periodNum, badgeElement) {
-      fetch(`/${lang}/api/students/${studentId}/toggle-period/${periodNum}/`, {
-          method: 'POST',
-          headers: {
-              'X-CSRFToken': csrftoken,
-              'Content-Type': 'application/json'
-          }
-      })
-      .then(response => response.json())
-      .then(data => {
-          badgeElement.style.opacity = '1';
-          if (data.success) {
-              if (data.new_status === 'Đã đóng') {
-                  badgeElement.className = "badge payment-toggle-badge bg-success text-white";
-                  badgeElement.innerHTML = `<i class="fas fa-check-circle me-1"></i>Đã đóng`;
-              } else {
-                  badgeElement.className = "badge payment-toggle-badge bg-light text-secondary border";
-                  badgeElement.innerHTML = `<i class="fas fa-clock me-1"></i>Chưa đóng`;
-              }
-          } else {
-              alert("Lỗi: " + (data.error || "Không xác định"));
-          }
-      })
-      .catch(err => {
-          badgeElement.style.opacity = '1';
-          console.error(err);
-          alert("Lỗi kết nối máy chủ!");
-      });
-  }
-
   function exportToCSV() {
     const csv = [];
     const rows = document.querySelectorAll("#student-excel-table tr");
@@ -387,4 +266,3 @@
   }
 </script>
 {% endblock js %}
-

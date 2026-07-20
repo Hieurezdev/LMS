@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Import học sinh từ Excel/CSV | {{ classroom.name }}{% endblock title %}
 
@@ -62,6 +63,11 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="mt-3">
+                    <a href="{% static 'templates/Mau_import_hoc_sinh.xlsx' %}" class="btn btn-sm btn-outline-primary rounded-3" download>
+                        <i class="fas fa-download me-1"></i>Tải file Excel mẫu (.xlsx)
+                    </a>
                 </div>
             </div>
 

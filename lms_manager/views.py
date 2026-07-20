@@ -1,13 +1,18 @@
 import csv
+import datetime
 import io
+import json
+import re
+from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Sum, Count
+from django.db import transaction, DatabaseError
 from django.contrib import messages
 from django.utils import timezone
-from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod
+from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod, PaymentBatch
 from .forms import ClassRoomForm, SubjectForm, TeacherForm, StudentForm, EnrollmentForm, PaymentForm, PaymentPeriodForm
 
 # -------------------------------------------------------------
@@ -22,6 +27,24 @@ def add_months(d, months):
         29 if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) else 28,
         31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month-1])
     return datetime.date(year, month, day)
+
+
+def assign_teacher_to_classroom(teacher, classroom):
+    """Enforce the rule that one classroom is taught by one teacher."""
+    classroom.teachers.set([teacher])
+    subject = teacher.subjects.order_by('name').first()
+    if not subject:
+        return
+
+    # Students in a class follow its assigned teacher.  Remove legacy
+    # registrations for another teacher before creating the class enrollment.
+    Enrollment.objects.filter(student__classroom=classroom).exclude(teacher=teacher).delete()
+    for student in classroom.students.all():
+        Enrollment.objects.get_or_create(
+            student=student,
+            subject=subject,
+            defaults={'teacher': teacher},
+        )
 
 
 def dashboard_view(request):
@@ -386,7 +409,12 @@ def teacher_create(request):
                 
                 class_objs.append(cls)
                 
-            teacher.classes.set(class_objs)
+            previous_classes = list(teacher.classes.all())
+            for classroom in previous_classes:
+                if classroom not in class_objs:
+                    classroom.teachers.remove(teacher)
+            for classroom in class_objs:
+                assign_teacher_to_classroom(teacher, classroom)
             
             messages.success(request, f"Đã thêm giảng viên '{teacher.name}' thành công!")
             return redirect('teacher_list')
@@ -465,7 +493,12 @@ def teacher_update(request, pk):
                 
                 class_objs.append(cls)
                 
-            teacher.classes.set(class_objs)
+            previous_classes = list(teacher.classes.all())
+            for classroom in previous_classes:
+                if classroom not in class_objs:
+                    classroom.teachers.remove(teacher)
+            for classroom in class_objs:
+                assign_teacher_to_classroom(teacher, classroom)
             
             messages.success(request, f"Đã cập nhật giảng viên '{teacher.name}' thành công!")
             return redirect('teacher_detail', pk=teacher.id)
@@ -515,7 +548,7 @@ def teacher_add_classroom(request, pk):
             messages.warning(request, f"Giảng viên '{teacher.name}' đã có lớp dạy tên '{capitalized_class}'!")
         else:
             cls = ClassRoom.objects.create(name=capitalized_class)
-            teacher.classes.add(cls)
+            assign_teacher_to_classroom(teacher, cls)
             messages.success(request, f"Đã thêm lớp dạy '{capitalized_class}' cho giảng viên '{teacher.name}'!")
     else:
         messages.error(request, "Tên lớp không hợp lệ!")
@@ -622,7 +655,9 @@ def teacher_import_excel(request, pk):
 # -------------------------------------------------------------
 def student_list(request):
     classrooms = ClassRoom.objects.all().order_by('name')
-    students = Student.objects.all().select_related('classroom').prefetch_related('enrollments__subject', 'enrollments__teacher')
+    students = Student.objects.all().select_related('classroom').prefetch_related(
+        'enrollments__subject', 'enrollments__teacher', 'payments__payment_period'
+    )
     
     search_name = request.GET.get('name', '').strip()
     classroom_id = request.GET.get('classroom_id', '').strip()
@@ -633,6 +668,22 @@ def student_list(request):
         students = students.filter(classroom_id=classroom_id)
         
     students = students.order_by('classroom__name', 'name')
+
+    # The payment columns are a read-only projection of recorded receipts.  Do
+    # not trust the legacy ``dot_*`` fields here: they may have been changed by
+    # the old manual-toggle UI and are not proof that tuition was collected.
+    for student in students:
+        paid_periods = {
+            int(match.group(1))
+            for payment in student.payments.all()
+            if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
+        }
+        for period_num in range(1, 9):
+            setattr(
+                student,
+                f'dot_{period_num}',
+                'Đã đóng' if period_num in paid_periods else 'Chưa đóng',
+            )
     
     return render(request, 'lms_manager/student_list.html', {
         'students': students,
@@ -648,8 +699,12 @@ def student_create(request):
         form = StudentForm(request.POST)
         if form.is_valid():
             student = form.save()
-            subject = form.cleaned_data.get('subject')
-            teacher = form.cleaned_data.get('teacher')
+            classroom_teacher = student.classroom.teachers.order_by('name').first() if student.classroom else None
+            teacher = classroom_teacher or form.cleaned_data.get('teacher')
+            subject = teacher.subjects.order_by('name').first() if teacher else form.cleaned_data.get('subject')
+
+            if teacher and student.classroom and not classroom_teacher:
+                assign_teacher_to_classroom(teacher, student.classroom)
             
             if subject and teacher:
                 Enrollment.objects.get_or_create(
@@ -669,6 +724,14 @@ def student_create(request):
         classroom_id = request.GET.get('classroom')
         if classroom_id:
             initial['classroom'] = classroom_id
+            classroom = ClassRoom.objects.filter(id=classroom_id).first()
+            if classroom:
+                assigned_teacher = classroom.teachers.order_by('name').first()
+                if assigned_teacher:
+                    initial['teacher'] = assigned_teacher.id
+                    subject = assigned_teacher.subjects.order_by('name').first()
+                    if subject:
+                        initial['subject'] = subject.id
             
         teacher_id = request.GET.get('teacher')
         if teacher_id:
@@ -753,14 +816,121 @@ def payment_list(request):
     payments = Payment.objects.all().order_by('-payment_date', '-id')
     return render(request, 'lms_manager/payment_list.html', {'payments': payments})
 
+
+def _payment_period_number(period_name):
+    match = re.fullmatch(r'Đợt\s+([1-8])', period_name.strip())
+    return int(match.group(1)) if match else None
+
+
+def _create_batch_payments(items, payment_date):
+    """Create individual payments and their one combined customer receipt."""
+    if not isinstance(items, list) or not items:
+        raise ValueError('Hãy thêm ít nhất một khoản thu.')
+
+    seen_items = set()
+    prepared_items = []
+    for index, item in enumerate(items, start=1):
+        try:
+            student = Student.objects.get(pk=int(item['student_id']))
+            teacher = Teacher.objects.get(pk=int(item['teacher_id']))
+            amount = Decimal(str(item['amount']))
+        except (KeyError, TypeError, ValueError, InvalidOperation, Student.DoesNotExist, Teacher.DoesNotExist):
+            raise ValueError(f'Khoản thu dòng {index} không hợp lệ.')
+
+        raw_periods = item.get('period_nums', [item.get('period_num')])
+        if not isinstance(raw_periods, list):
+            raw_periods = [raw_periods]
+        try:
+            period_nums = [int(period_num) for period_num in raw_periods]
+        except (TypeError, ValueError):
+            raise ValueError(f'Khoản thu dòng {index} không hợp lệ.')
+
+        if not period_nums or any(period_num not in range(1, 9) for period_num in period_nums) or amount <= 0:
+            raise ValueError(f'Khoản thu dòng {index} không hợp lệ.')
+        if not student.classroom:
+            raise ValueError(f'Học sinh {student.name} chưa được xếp lớp.')
+
+        enrollment = Enrollment.objects.filter(student=student, teacher=teacher).select_related('subject').first()
+        if not enrollment:
+            raise ValueError(f'Học sinh {student.name} chưa đăng ký học với giảng viên {teacher.name}.')
+
+        for period_num in period_nums:
+            item_key = (student.id, teacher.id, period_num)
+            if item_key in seen_items:
+                raise ValueError(f'Khoản thu dòng {index} bị trùng học sinh, giảng viên và đợt thu.')
+            seen_items.add(item_key)
+            if Payment.objects.filter(
+                student=student,
+                teacher=teacher,
+                payment_period__name=f'Đợt {period_num}',
+            ).exists():
+                raise ValueError(
+                    f'Học sinh {student.name} đã đóng Đợt {period_num} với giảng viên {teacher.name}.'
+                )
+            prepared_items.append((student, teacher, enrollment.subject, period_num, amount))
+
+    with transaction.atomic():
+        batch = PaymentBatch.objects.create(payment_date=payment_date)
+        payments = []
+        for student, teacher, subject, period_num, amount in prepared_items:
+            period, _ = PaymentPeriod.objects.get_or_create(
+                name=f'Đợt {period_num}', teacher=teacher, subject=subject
+            )
+            payment = Payment.objects.create(
+                student=student,
+                classroom=student.classroom,
+                subject=subject,
+                teacher=teacher,
+                payment_period=period,
+                amount=amount,
+                payment_date=payment_date,
+            )
+            # Retain the legacy status for pages that still display it.  The
+            # student list itself derives its status from Payment records.
+            setattr(student, f'dot_{period_num}', 'Đã đóng')
+            student.save(update_fields=[f'dot_{period_num}'])
+            payments.append(payment)
+
+        batch.payments.add(*payments)
+        batch.generate_receipt_pdf()
+    return batch
+
 def payment_create(request):
     if request.method == 'POST':
+        batch_items = request.POST.get('batch_items')
+        if batch_items is not None:
+            try:
+                items = json.loads(batch_items)
+                payment_date = datetime.datetime.strptime(
+                    request.POST.get('payment_date', ''), '%Y-%m-%d'
+                ).date()
+                batch = _create_batch_payments(items, payment_date)
+            except DatabaseError:
+                error = 'Cơ sở dữ liệu chưa được cập nhật cho tính năng thu học phí. Hãy chạy lệnh migrate rồi thử lại.'
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error}, status=503)
+                messages.error(request, error)
+            except (ValueError, json.JSONDecodeError) as exc:
+                error = str(exc) or 'Dữ liệu thu học phí không hợp lệ.'
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error}, status=400)
+                messages.error(request, error)
+            else:
+                from django.urls import reverse
+                receipt_url = reverse('payment_batch_receipt', kwargs={'pk': batch.id})
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'receipt_url': receipt_url,
+                        'redirect_url': reverse('payment_list'),
+                    })
+                return redirect(receipt_url)
+
         form = PaymentForm(request.POST)
         if form.is_valid():
             payment = form.save(commit=False)
             
             # Get typed student name and parse name, classroom, phone
-            import re
             raw_name = form.cleaned_data.get('student_name', '').strip()
             
             match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$", raw_name, re.IGNORECASE)
@@ -896,7 +1066,18 @@ def payment_create(request):
                 initial_data['student_name'] = student.name
         form = PaymentForm(initial=initial_data)
         
-    existing_students = Student.objects.all().order_by('name')
+    existing_students = Student.objects.all().order_by('name').prefetch_related(
+        'enrollments__teacher', 'payments__payment_period'
+    )
+    for student in existing_students:
+        paid_periods = {
+            int(match.group(1))
+            for payment in student.payments.all()
+            if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
+        }
+        student.unpaid_period_numbers = [
+            period_num for period_num in range(1, 9) if period_num not in paid_periods
+        ]
     return render(request, 'lms_manager/payment_create.html', {
         'form': form,
         'existing_students': existing_students
@@ -940,7 +1121,6 @@ def payment_edit(request, pk):
     if request.method == 'POST':
         form = PaymentForm(request.POST, instance=payment)
         if form.is_valid():
-            import re
             raw_name = form.cleaned_data.get('student_name', '').strip()
             match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$", raw_name, re.IGNORECASE)
             if match:
@@ -1060,6 +1240,19 @@ def payment_receipt(request, pk):
         
     response = HttpResponse(payment.receipt_pdf.read(), content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="receipt_{payment.id}.pdf"'
+    return response
+
+
+@xframe_options_sameorigin
+def payment_batch_receipt(request, pk):
+    batch = get_object_or_404(PaymentBatch, pk=pk)
+    import os
+    if not batch.receipt_pdf or not os.path.exists(batch.receipt_pdf.path):
+        batch.generate_receipt_pdf()
+        batch.refresh_from_db()
+
+    response = HttpResponse(batch.receipt_pdf.read(), content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="batch_receipt_{batch.id}.pdf"'
     return response
 
 
@@ -1254,19 +1447,12 @@ def classroom_detail(request, pk):
             'count': len(students_list)
         })
         
-    # Find students in this classroom who are not enrolled under any teacher yet
-    unregistered_students = Student.objects.filter(
-        classroom=classroom,
-        enrollments__isnull=True
-    ).order_by('name')
-    
     total_paid_all = Payment.objects.filter(classroom=classroom).aggregate(total=Sum('amount'))['total'] or 0
     
     return render(request, 'lms_manager/classroom_detail.html', {
         'classroom': classroom,
         'total_paid_all': total_paid_all,
         'teacher_reports': teacher_reports,
-        'unregistered_students': unregistered_students,
     })
 
 
@@ -1384,7 +1570,6 @@ def _parse_import_date(date_str):
     if not date_str:
         return None
     from datetime import datetime
-    import dateutil.parser
     date_str = date_str.strip()
     for fmt in ('%Y-%m-%d %H:%M:%S', '%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%Y/%m/%d'):
         try:
@@ -1392,8 +1577,9 @@ def _parse_import_date(date_str):
         except ValueError:
             continue
     try:
-        return dateutil.parser.parse(date_str, dayfirst=True).date()
-    except Exception:
+        from dateutil import parser
+        return parser.parse(date_str, dayfirst=True).date()
+    except (ImportError, ValueError, TypeError):
         return None
 
 
@@ -1403,8 +1589,12 @@ def classroom_import_excel(request, pk):
     teacher = None
     if teacher_id:
         teacher = get_object_or_404(Teacher, pk=teacher_id)
+    else:
+        teacher = classroom.teachers.order_by('name').first()
     
     if request.method == 'POST':
+        if teacher:
+            assign_teacher_to_classroom(teacher, classroom)
         excel_file = request.FILES.get('excel_file')
         if not excel_file:
             messages.error(request, "Vui lòng chọn một tệp Excel hoặc CSV để tải lên!")
@@ -1437,24 +1627,28 @@ def classroom_import_excel(request, pk):
                 messages.error(request, "Tệp trống hoặc không chứa dữ liệu!")
                 return redirect(request.path + (f"?teacher={teacher_id}" if teacher_id else ""))
                 
-            # Validate headers
-            headers = [h.strip() for h in rows[0]]
+            # Locate the header row.  Downloadable templates may include a
+            # title and short instructions above the column headers.
             required = ['Tên', 'SĐT', 'Lớp']
-            missing = []
-            header_map = {}
-            for req in required:
-                found_idx = -1
-                for idx, h in enumerate(headers):
-                    if h.lower() == req.lower():
-                        found_idx = idx
-                        break
-                if found_idx == -1:
-                    missing.append(req)
-                else:
-                    header_map[req] = found_idx
-                    
-            if missing:
-                messages.error(request, f"Tệp tải lên thiếu các cột bắt buộc: {', '.join(missing)}")
+            header_row_index = None
+            header_map = None
+            headers = []
+            for row_index, candidate_row in enumerate(rows[:10]):
+                candidate_headers = [cell.strip() for cell in candidate_row]
+                candidate_map = {}
+                for req in required:
+                    for column_index, header in enumerate(candidate_headers):
+                        if header.lower() == req.lower():
+                            candidate_map[req] = column_index
+                            break
+                if len(candidate_map) == len(required):
+                    header_row_index = row_index
+                    header_map = candidate_map
+                    headers = candidate_headers
+                    break
+
+            if header_row_index is None:
+                messages.error(request, f"Tệp tải lên thiếu các cột bắt buộc: {', '.join(required)}")
                 return redirect(request.path + (f"?teacher={teacher_id}" if teacher_id else ""))
                 
             # Find optional start_date column
@@ -1466,7 +1660,7 @@ def classroom_import_excel(request, pk):
 
             # Process rows
             imported_count = 0
-            for row_idx, row in enumerate(rows[1:], start=2):
+            for row_idx, row in enumerate(rows[header_row_index + 1:], start=header_row_index + 2):
                 if not row or len(row) <= max(header_map.values()):
                     continue
                     
@@ -1479,21 +1673,12 @@ def classroom_import_excel(request, pk):
                     continue
                     
                 capitalized_name = " ".join(word.capitalize() for word in name.split())
-                capitalized_class = " ".join(
-                    word.upper() if (len(word) <= 4 and any(char.isdigit() for char in word))
-                    else word.capitalize()
-                    for word in class_name.split()
-                )
-                
+                # This import is launched from a specific classroom.  Keep all
+                # imported students in that classroom even if the spreadsheet
+                # contains a different class name.
+                row_classroom = classroom
                 if teacher:
-                    row_classroom = teacher.classes.filter(name=capitalized_class).first()
-                    if not row_classroom:
-                        row_classroom = ClassRoom.objects.create(name=capitalized_class)
-                        teacher.classes.add(row_classroom)
-                else:
-                    row_classroom = ClassRoom.objects.filter(name=capitalized_class).first()
-                    if not row_classroom:
-                        row_classroom = ClassRoom.objects.create(name=capitalized_class)
+                    assign_teacher_to_classroom(teacher, row_classroom)
                 
                 start_date_val = None
                 if start_date_idx != -1 and len(row) > start_date_idx:
@@ -1507,7 +1692,6 @@ def classroom_import_excel(request, pk):
                 )
                 
                 if teacher:
-                    teacher.classes.add(row_classroom)
                     subject = teacher.subjects.first() or Subject.objects.first()
                     if subject:
                         Enrollment.objects.get_or_create(
@@ -1519,7 +1703,7 @@ def classroom_import_excel(request, pk):
                 imported_count += 1
                 
             messages.success(request, f"Đã nhập thành công {imported_count} học sinh vào hệ thống!")
-            if teacher:
+            if teacher_id:
                 return redirect('teacher_detail', pk=teacher.id)
             return redirect('classroom_detail', pk=classroom.id)
             
@@ -1537,46 +1721,12 @@ from django.views.decorators.http import require_POST
 
 @require_POST
 def student_toggle_period(request, pk, period_num):
-    if period_num < 1 or period_num > 8:
-        return JsonResponse({'success': False, 'error': 'Đợt không hợp lệ'}, status=400)
-        
-    student = get_object_or_404(Student, pk=pk)
-    field_name = f"dot_{period_num}"
-    current_status = getattr(student, field_name)
-    new_status = 'Đã đóng' if current_status == 'Chưa đóng' else 'Chưa đóng'
-    
-    setattr(student, field_name, new_status)
-    student.save()
-    
-    # Sync with Payments table for consistency
-    if new_status == 'Đã đóng':
-        enrollment = Enrollment.objects.filter(student=student).first()
-        if enrollment:
-            period, _ = PaymentPeriod.objects.get_or_create(
-                name=f"Đợt {period_num}",
-                teacher=enrollment.teacher,
-                subject=enrollment.subject
-            )
-            Payment.objects.get_or_create(
-                student=student,
-                classroom=student.classroom,
-                subject=enrollment.subject,
-                teacher=enrollment.teacher,
-                payment_period=period,
-                defaults={'amount': 500000, 'payment_date': timezone.localdate()}
-            )
-    else:
-        Payment.objects.filter(
-            student=student,
-            payment_period__name=f"Đợt {period_num}"
-        ).delete()
-        
+    # Kept temporarily so old clients receive a clear error instead of a 404.
+    # A payment status may only change through the payment-recording workflow.
     return JsonResponse({
-        'success': True,
-        'new_status': new_status,
-        'period_num': period_num,
-        'student_id': student.id
-    })
+        'success': False,
+        'error': 'Trạng thái học phí chỉ được cập nhật khi ghi nhận khoản thu.'
+    }, status=405)
 
 
 def get_student_teachers(request, student_id):
@@ -1630,4 +1780,3 @@ def get_receipt_url(request, student_id, period_num):
             'success': False,
             'error': 'Không tìm thấy biên lai đóng tiền cho đợt này.'
         })
-

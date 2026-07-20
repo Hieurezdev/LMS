@@ -275,56 +275,7 @@
         {% empty %}
         {% endfor %}
 
-        <!-- Học sinh chưa đăng ký môn học -->
-        {% if unregistered_students %}
-        <div class="table-card mb-4 shadow-sm rounded-4 overflow-hidden border bg-white">
-            <div class="table-card-header bg-white p-3 border-bottom">
-                <div class="table-card-title fw-bold text-dark fs-5 mb-0">
-                    <i class="fas fa-user-slash me-2 text-warning"></i>
-                    Học sinh chưa phân công môn học & giảng viên
-                    <span class="badge bg-warning text-dark border ms-2" style="font-size: 11.5px; font-weight: normal;">
-                      {{ unregistered_students.count }} học sinh
-                    </span>
-                </div>
-            </div>
-
-            <div class="table-responsive">
-                <table class="lms-table table table-hover align-middle mb-0" id="table-unregistered" style="font-size: 13.5px;">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 80px;" class="text-center">STT</th>
-                            <th>Tên học sinh</th>
-                            <th style="width: 250px;">Số điện thoại</th>
-                            <th class="no-export text-center" style="width: 180px;">Hành động</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for s in unregistered_students %}
-                        <tr>
-                            <td class="text-center fw-semibold text-secondary">{{ forloop.counter }}</td>
-                            <td>
-                                <a href="{% url 'student_detail' s.id %}" class="fw-semibold text-dark text-decoration-none d-block">
-                                    <div style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#FEEFEE;color:#F74F4F;font-size:12px;font-weight:700;margin-right:8px;vertical-align:middle;">
-                                      {{ s.name|first|upper }}
-                                    </div>
-                                    {{ s.name }}
-                                </a>
-                            </td>
-                            <td style="color:#64748B;">{{ s.phone|default:"-" }}</td>
-                            <td class="text-center no-export">
-                                <a href="{% url 'student_register' s.id %}" class="btn btn-sm btn-success rounded-3" title="Đăng ký môn học">
-                                  <i class="fas fa-user-plus me-1"></i> Đăng ký học
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        {% endif %}
-
-        {% if not teacher_reports and not unregistered_students %}
+        {% if not teacher_reports %}
         <div class="card p-5 text-center shadow-sm rounded-4 border bg-white">
             <i class="fas fa-inbox fa-3x mb-3 text-secondary" style="color:#CBD5E1;"></i>
             <h5 class="fw-bold text-dark">Chưa có học sinh nào</h5>
@@ -510,4 +461,3 @@
     }
 </script>
 {% endblock js %}
-

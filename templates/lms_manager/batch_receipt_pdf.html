@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Biên lai tổng hợp #{{ batch.id }}</title>
+  <style>
+    @page { size: a4 portrait; margin: 1.5cm; }
+    @font-face { font-family: 'Roboto'; src: url('/static/fonts/roboto/Roboto-Regular.ttf'); }
+    @font-face { font-family: 'Roboto'; src: url('/static/fonts/roboto/Roboto-Bold.ttf'); font-weight: bold; }
+    body { font-family: 'Roboto', sans-serif; color: #1f2937; font-size: 11px; line-height: 1.4; }
+    .header { border-bottom: 2px solid #2563eb; margin-bottom: 18px; padding-bottom: 10px; }
+    .title { color: #1d4ed8; font-size: 20px; font-weight: bold; }
+    .muted { color: #64748b; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #eff6ff; color: #1e3a8a; font-weight: bold; text-align: left; }
+    th, td { border: 1px solid #cbd5e1; padding: 7px 6px; vertical-align: top; }
+    .amount { text-align: right; white-space: nowrap; }
+    .total { margin-top: 16px; width: 45%; margin-left: auto; }
+    .total td { border: 0; padding: 8px; }
+    .total .label { font-weight: bold; }
+    .total .value { color: #15803d; font-size: 16px; font-weight: bold; text-align: right; }
+    .signatures { margin-top: 42px; }
+    .signatures td { border: 0; text-align: center; width: 50%; padding-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">BIÊN LAI THU HỌC PHÍ TỔNG HỢP</div>
+    <div class="muted">Số: BTH-{{ batch.id|stringformat:"06d" }} &nbsp;|&nbsp; Ngày thu: {{ batch.payment_date|date:"d/m/Y" }}</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>STT</th><th>Học sinh</th><th>Lớp</th><th>Môn học</th><th>Giảng viên</th><th>Đợt thu</th><th>Số tiền</th></tr>
+    </thead>
+    <tbody>
+      {% for payment in payments %}
+      <tr>
+        <td>{{ forloop.counter }}</td><td>{{ payment.student.name }}</td><td>{{ payment.classroom.name }}</td>
+        <td>{{ payment.subject.name }}</td><td>{{ payment.teacher.name }}</td><td>{{ payment.payment_period.name }}</td>
+        <td class="amount">{{ payment.amount|floatformat:0 }} VNĐ</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="total"><tr><td class="label">TỔNG ĐÃ THU:</td><td class="value">{{ total_amount|floatformat:0 }} VNĐ</td></tr></table>
+  <table class="signatures"><tr><td><strong>Người nộp tiền</strong><br><span class="muted">(Ký và ghi rõ họ tên)</span></td><td><strong>Người thu tiền</strong><br><span class="muted">(Ký và ghi rõ họ tên)</span></td></tr></table>
+</body>
+</html>

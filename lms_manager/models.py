@@ -225,3 +225,38 @@ class Payment(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         self.generate_receipt_pdf()
+
+
+class PaymentBatch(models.Model):
+    """A single collection session that may contain several payment records."""
+    payments = models.ManyToManyField(Payment, related_name='batches')
+    payment_date = models.DateField(default=timezone.now, verbose_name="Ngày thu")
+    created_at = models.DateTimeField(auto_now_add=True)
+    receipt_pdf = models.FileField(upload_to="receipts/batches/", blank=True, null=True,
+                                   verbose_name="Biên lai tổng hợp PDF")
+
+    class Meta:
+        verbose_name = "Phiếu thu tổng hợp"
+        verbose_name_plural = "Phiếu thu tổng hợp"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Phiếu thu tổng hợp #{self.pk}"
+
+    def generate_receipt_pdf(self):
+        payments = self.payments.select_related(
+            'student', 'classroom', 'subject', 'teacher', 'payment_period'
+        ).order_by('student__name', 'id')
+        context = {
+            'batch': self,
+            'payments': payments,
+            'total_amount': sum(payment.amount for payment in payments),
+        }
+        html_string = render_to_string('lms_manager/batch_receipt_pdf.html', context)
+        pdf_io = BytesIO()
+        pisa_status = pisa.CreatePDF(html_string, dest=pdf_io, link_callback=link_callback)
+        if not pisa_status.err:
+            pdf_io.seek(0)
+            filename = f"batch_receipt_{self.id}.pdf"
+            self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
+            PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)

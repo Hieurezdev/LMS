@@ -1,223 +1,141 @@
 {% extends 'base.html' %}
-{% load crispy_forms_tags %}
 
-{% block title %}Ghi nhận đóng học phí{% endblock title %}
+{% block title %}Thu học phí{% endblock title %}
 
 {% block content %}
 <div class="container-fluid pt-3">
-{% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
-<div class="row justify-content-center mt-3">
-    <div class="col-12 col-md-8 col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 p-4">
-            <h4 class="fw-bold text-dark mb-4 text-center">Ghi nhận đóng học phí</h4>
-            
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-
-            <form method="POST" novalidate>
-                {% csrf_token %}
-                
-                {{ form|crispy }}
-                
-                <!-- Datalist for student name autocomplete -->
-                <datalist id="student-list">
-                    {% for s in existing_students %}
-                        <option value="{{ s.name }} (Lớp {{ s.classroom.name }}{% if s.phone %} - SĐT: {{ s.phone }}{% endif %})">
-                    {% endfor %}
-                </datalist>
-                
-                <div class="d-flex justify-content-between mt-4">
-                    <a href="{% url 'payment_list' %}" class="btn btn-outline-secondary px-4 rounded-3">
-                        <i class="fas fa-arrow-left me-2"></i>Quay lại
-                    </a>
-                    <button type="submit" class="btn btn-primary px-4 rounded-3">
-                        <i class="fas fa-save me-2"></i>Lưu giao dịch
-                    </button>
-                </div>
-            </form>
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+  <div class="row justify-content-center mt-3">
+    <div class="col-12 col-xl-10">
+      <div class="card border-0 shadow-sm rounded-4 p-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+          <div>
+            <h4 class="fw-bold text-dark mb-1">Thu học phí</h4>
+            <div class="text-secondary small">Mỗi dòng là một khoản thu riêng. Sau khi lưu, hệ thống tạo biên lai riêng cho từng khoản và mở một biên lai tổng hợp.</div>
+          </div>
+          <div style="min-width: 180px;">
+            <label for="payment-date" class="form-label fw-semibold small">Ngày thu</label>
+            <input id="payment-date" type="date" class="form-control" value="{% now 'Y-m-d' %}">
+          </div>
         </div>
+
+        <form id="batch-payment-form" method="post" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="batch_items" id="batch-items">
+          <div id="batch-payment-list" class="d-flex flex-column gap-3"></div>
+          <button type="button" id="add-payment-row" class="btn btn-outline-primary btn-sm rounded-3 mt-3"><i class="fas fa-plus me-1"></i> Thêm khoản thu</button>
+          <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+            <a href="{% url 'payment_list' %}" class="btn btn-outline-secondary px-4 rounded-3"><i class="fas fa-arrow-left me-2"></i>Quay lại</a>
+            <div class="text-end"><div class="text-secondary small">Tổng thu</div><div id="batch-total" class="fw-bold text-success fs-5">0 VNĐ</div></div>
+            <button type="submit" class="btn btn-primary px-4 rounded-3"><i class="fas fa-save me-2"></i>Lưu và xuất biên lai tổng</button>
+          </div>
+        </form>
+      </div>
     </div>
-</div>
+  </div>
 </div>
 {% endblock content %}
 
 {% block js %}
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const studentNameInput = document.getElementById("id_student_name");
-        const teacherSelect = document.getElementById("id_teacher");
-        const periodSelect = document.getElementById("id_payment_period");
-        const amountInput = document.getElementById("id_amount");
-        const lang = '{{ request.LANGUAGE_CODE|default:"en" }}';
+  const students = [
+    {% for student in existing_students %}
+      {id: {{ student.id }}, name: "{{ student.name|escapejs }}", classroom: "{{ student.classroom.name|default:'Chưa xếp lớp'|escapejs }}", unpaidPeriods: {{ student.unpaid_period_numbers|safe }}, teachers: [{% for enrollment in student.enrollments.all %}{id: {{ enrollment.teacher.id }}, name: "{{ enrollment.teacher.name|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]},
+    {% endfor %}
+  ];
+  const periodOptions = Array.from({length: 8}, (_, index) => `<label class="btn btn-outline-secondary btn-sm py-0"><input class="period-input visually-hidden" type="checkbox" value="${index + 1}"> Đợt ${index + 1}</label>`).join(' ');
+  const paymentList = document.querySelector('#batch-payment-list');
+  const money = new Intl.NumberFormat('vi-VN');
 
-        // Map containing existing students
-        const studentsData = {};
-        {% for s in existing_students %}
-            studentsData["{{ s.name|escapejs }} (Lớp {{ s.classroom.name|escapejs }}{% if s.phone %} - SĐT: {{ s.phone|escapejs }}{% endif %})"] = "{{ s.id }}";
-            if (!studentsData["{{ s.name|escapejs }}"]) {
-                studentsData["{{ s.name|escapejs }}"] = "{{ s.id }}";
-            }
-        {% endfor %}
-
-        function getCleanStudentName(val) {
-            val = val.trim();
-            const match = val.match(/^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$/i);
-            return match ? match[1].trim() : val;
-        }
-
-
-        // Add Quick helper buttons for amount input
-        if (amountInput) {
-            const quickContainer = document.createElement("div");
-            quickContainer.className = "mt-2 d-flex flex-wrap gap-2 align-items-center";
-            quickContainer.innerHTML = `
-                <span class="text-secondary small me-1" style="font-size: 11px;"><i class="fas fa-magic me-1 text-warning"></i>Chọn nhanh:</span>
-                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="400000" style="font-size: 11px;">400k</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="450000" style="font-size: 11px;">450k</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="500000" style="font-size: 11px;">500k</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="550000" style="font-size: 11px;">550k</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary rounded-pill py-0.5 px-2 quick-amount-btn" data-value="600000" style="font-size: 11px;">600k</button>
-            `;
-            amountInput.parentNode.insertBefore(quickContainer, amountInput.nextSibling);
-            
-            quickContainer.querySelectorAll(".quick-amount-btn").forEach(btn => {
-                btn.addEventListener("click", function() {
-                    amountInput.value = this.getAttribute("data-value");
-                });
-            });
-        }
-
-        function filterTeachers() {
-            const rawVal = studentNameInput.value.trim();
-            const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
-            
-            if (!studentId) {
-                return;
-            }
-
-            fetch(`/${lang}/api/students/${studentId}/teachers/`)
-                .then(response => response.json())
-                .then(data => {
-                    let options = '<option value="">Chọn giảng viên</option>';
-                    data.teachers.forEach(t => {
-                        options += `<option value="${t.id}">${t.name}</option>`;
-                    });
-                    teacherSelect.innerHTML = options;
-                    periodSelect.innerHTML = '<option value="">Chọn đợt đóng tiền</option>';
-                })
-                .catch(err => console.error("Lỗi tải danh sách giảng viên:", err));
-        }
-
-        function filterUnpaidPeriods() {
-            const rawVal = studentNameInput.value.trim();
-            const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
-            const teacherId = teacherSelect.value;
-            
-            if (!studentId || !teacherId) {
-                periodSelect.innerHTML = '<option value="">Chọn đợt đóng tiền</option>';
-                return;
-            }
-
-            fetch(`/${lang}/api/students/${studentId}/unpaid-periods/`)
-                .then(response => response.json())
-                .then(data => {
-                    let options = '<option value="">Chọn đợt đóng tiền</option>';
-                    data.periods.forEach(p => {
-                        options += `<option value="${p.id}">${p.name}</option>`;
-                    });
-                    periodSelect.innerHTML = options;
-                })
-                .catch(err => console.error("Lỗi tải đợt chưa đóng:", err));
-        }
-
-        if (studentNameInput) {
-            studentNameInput.addEventListener("input", filterTeachers);
-            studentNameInput.addEventListener("change", function() {
-                const rawVal = this.value.trim();
-                const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
-                if (studentId) {
-                    filterTeachers();
-                }
-            });
-            
-            // Execute initially if student is prefilled
-            if (studentNameInput.value) {
-                const rawVal = studentNameInput.value.trim();
-                const studentId = studentsData[rawVal] || studentsData[getCleanStudentName(rawVal)];
-                if (studentId) {
-                    filterTeachers();
-                }
-            }
-        }
-
-        if (teacherSelect) {
-            teacherSelect.addEventListener("change", filterUnpaidPeriods);
-        }
-
-        const form = document.querySelector('form');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                // Open new tab immediately (synchronously, to bypass popup blocker)
-                const newTab = window.open('about:blank', '_blank');
-                
-                const submitBtn = form.querySelector('button[type="submit"]');
-                if (submitBtn) submitBtn.disabled = true;
-                
-                const formData = new FormData(form);
-                
-                fetch(form.action || window.location.href, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        // Redirect the new tab to the receipt PDF
-                        if (newTab) {
-                            newTab.location.href = data.receipt_url;
-                        }
-                        // Redirect main tab
-                        window.location.href = data.redirect_url;
-                    } else {
-                        if (submitBtn) submitBtn.disabled = false;
-                        // Close the opened tab since submission failed
-                        if (newTab) {
-                            newTab.close();
-                        }
-                        
-                        let errorMsg = "";
-                        for (const field in data.errors) {
-                            data.errors[field].forEach(err => {
-                                errorMsg += `${field}: ${err.message}\n`;
-                            });
-                        }
-                        alert("Lỗi nhập liệu:\n" + errorMsg);
-                    }
-                })
-                .catch(err => {
-                    if (submitBtn) submitBtn.disabled = false;
-                    if (newTab) {
-                        newTab.close();
-                    }
-                    console.error(err);
-                    alert("Lỗi kết nối máy chủ khi lưu thanh toán!");
-                });
-            });
-        }
+  function escapeHtml(value) {
+    const element = document.createElement('div'); element.textContent = value; return element.innerHTML;
+  }
+  function updateTeachers(row) {
+    const student = students.find(item => item.id === Number(row.querySelector('.student-id-input').value));
+    const teacherInput = row.querySelector('.teacher-input');
+    teacherInput.innerHTML = '<option value="">Chọn giảng viên</option>' + (student ? student.teachers.map(teacher => `<option value="${teacher.id}">${escapeHtml(teacher.name)}</option>`).join('') : '');
+  }
+  function updatePeriods(row) {
+    const student = students.find(item => item.id === Number(row.querySelector('.student-id-input').value));
+    row.querySelectorAll('.period-input').forEach(input => {
+      const available = student && student.unpaidPeriods.includes(Number(input.value));
+      input.checked = false;
+      input.disabled = !available;
+      const label = input.closest('label');
+      label.classList.toggle('disabled', !available);
+      label.classList.remove('active');
     });
+    updateTotal();
+  }
+  function updateTotal() {
+    const total = [...paymentList.querySelectorAll('.batch-payment-row')].reduce((sum, row) => sum + ((Number(row.querySelector('.amount-input').value) || 0) * row.querySelectorAll('.period-input:checked').length), 0);
+    document.querySelector('#batch-total').textContent = `${money.format(total)} VNĐ`;
+  }
+  function addRow() {
+    const row = document.createElement('div');
+    row.className = 'batch-payment-row border rounded-3 p-3 bg-light bg-opacity-25 position-relative';
+    row.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-3"><strong class="text-dark"><i class="fas fa-receipt text-primary me-2"></i>Khoản thu</strong><button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Xóa khoản thu"><i class="fas fa-times me-1"></i>Xóa</button></div><div class="mb-3"><label class="form-label fw-semibold small">Học sinh</label><div class="position-relative"><input type="hidden" class="student-id-input"><input type="text" class="form-control student-name-input" autocomplete="off" placeholder="Nhập tên học sinh để tìm kiếm..."><div class="student-suggestions position-absolute w-100 bg-white border rounded-2 shadow-sm d-none" style="z-index:20; max-height:200px; overflow-y:auto;"></div></div></div><div class="mb-3"><label class="form-label fw-semibold small">Giảng viên</label><select class="form-select teacher-input" disabled><option value="">Chọn giảng viên</option></select></div><div class="mb-3"><label class="form-label fw-semibold small d-block">Đợt thu</label><div class="period-picker d-flex flex-wrap gap-2">${periodOptions}</div><div class="form-text">Có thể chọn nhiều đợt cho cùng học sinh.</div></div><div><label class="form-label fw-semibold small">Số tiền mỗi đợt (VNĐ)</label><input type="number" min="1" step="1" class="form-control amount-input" placeholder="Ví dụ: 500000"><div class="d-flex flex-wrap align-items-center gap-2 mt-2"><span class="text-secondary small">Chọn nhanh:</span><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="75000">75k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="125000">125k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="250000">250k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="300000">300k</button></div></div>`;
+    const nameInput = row.querySelector('.student-name-input');
+    const studentIdInput = row.querySelector('.student-id-input');
+    const suggestions = row.querySelector('.student-suggestions');
+    const normalized = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+    const selectStudent = student => { studentIdInput.value = student.id; nameInput.value = `${student.name} - ${student.classroom}`; suggestions.classList.add('d-none'); updateTeachers(row); updatePeriods(row); row.querySelector('.teacher-input').disabled = false; };
+    const showSuggestions = clearSelection => {
+      const query = normalized(nameInput.value.trim());
+      if (clearSelection) studentIdInput.value = '';
+      const matches = students.filter(student => student.unpaidPeriods.length && (!query || normalized(`${student.name} ${student.classroom}`).includes(query))).slice(0, 8);
+      suggestions.innerHTML = matches.length ? matches.map(student => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 student-suggestion" data-id="${student.id}"><strong>${escapeHtml(student.name)}</strong><br><small class="text-secondary">${escapeHtml(student.classroom)}</small></button>`).join('') : '<div class="px-3 py-2 text-secondary small">Không tìm thấy học sinh phù hợp</div>';
+      suggestions.classList.remove('d-none');
+      suggestions.querySelectorAll('.student-suggestion').forEach(button => button.addEventListener('mousedown', event => { event.preventDefault(); selectStudent(students.find(student => student.id === Number(button.dataset.id))); }));
+    };
+    nameInput.addEventListener('input', () => showSuggestions(true));
+    nameInput.addEventListener('focus', () => showSuggestions(false));
+    nameInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        const firstMatch = suggestions.querySelector('.student-suggestion');
+        if (firstMatch) { event.preventDefault(); firstMatch.dispatchEvent(new MouseEvent('mousedown')); }
+      }
+    });
+    nameInput.addEventListener('blur', () => setTimeout(() => suggestions.classList.add('d-none'), 150));
+    row.querySelector('.amount-input').addEventListener('input', updateTotal);
+    row.querySelectorAll('.quick-amount').forEach(button => button.addEventListener('click', () => {
+      row.querySelector('.amount-input').value = button.dataset.amount;
+      updateTotal();
+    }));
+    row.querySelectorAll('.period-input').forEach(input => input.addEventListener('change', () => { input.closest('label').classList.toggle('active', input.checked); updateTotal(); }));
+    row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateTotal(); });
+    paymentList.appendChild(row);
+  }
+  document.querySelector('#add-payment-row').addEventListener('click', addRow);
+  addRow();
+
+  document.querySelector('#batch-payment-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const rows = [...paymentList.querySelectorAll('.batch-payment-row')];
+    const items = rows.map(row => ({student_id: row.querySelector('.student-id-input').value, teacher_id: row.querySelector('.teacher-input').value, period_nums: [...row.querySelectorAll('.period-input:checked')].map(input => input.value), amount: row.querySelector('.amount-input').value}));
+    if (!items.length || items.some(item => !item.student_id || !item.teacher_id || !item.period_nums.length || Number(item.amount) <= 0)) {
+      alert('Vui lòng nhập đầy đủ học sinh, giảng viên, đợt thu và số tiền cho mọi dòng.'); return;
+    }
+    document.querySelector('#batch-items').value = JSON.stringify(items);
+    const date = document.querySelector('#payment-date').value;
+    if (!date) { alert('Vui lòng chọn ngày thu.'); return; }
+    const popup = window.open('about:blank', '_blank');
+    const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true;
+    const data = new FormData(event.currentTarget); data.append('payment_date', date);
+    try {
+      const response = await fetch(event.currentTarget.action || window.location.href, {method: 'POST', body: data, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      const responseText = await response.text();
+      let result;
+      try { result = JSON.parse(responseText); }
+      catch (_) {
+        throw new Error(`Máy chủ trả về lỗi ${response.status}. Nếu vừa cập nhật mã nguồn, hãy chạy: python manage.py migrate`);
+      }
+      if (!result.success) throw new Error(result.error || 'Không thể lưu khoản thu.');
+      if (popup) popup.location.href = result.receipt_url;
+      window.location.href = result.redirect_url;
+    } catch (error) {
+      button.disabled = false; if (popup) popup.close(); alert(error.message || 'Không thể lưu khoản thu.');
+    }
+  });
 </script>
 {% endblock js %}
-
-
