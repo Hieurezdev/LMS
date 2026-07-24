@@ -27,6 +27,24 @@
     {% endfor %}
   {% endif %}
 
+  <form method="get" class="card p-3 mb-4 border-0 shadow-sm">
+    <div class="row g-2 align-items-center">
+      <div class="col-12 col-md">
+        <label for="teacher-search" class="visually-hidden">Tìm giảng viên</label>
+        <div class="input-group">
+          <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-secondary"></i></span>
+          <input id="teacher-search" type="search" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Tìm theo tên hoặc số điện thoại..." autocomplete="off">
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i> Tìm kiếm</button>
+        {% if search_query %}
+        <a href="{% url 'teacher_list' %}" class="btn btn-outline-secondary">Xóa lọc</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+
   <div class="row g-3">
     {% for t in teachers %}
     <div class="col-12 col-md-6 col-xl-4">
@@ -94,8 +112,8 @@
     <div class="col-12">
       <div class="card p-5 text-center" style="border:2px dashed #E2E8F0 !important;background:#FAFBFF !important;">
         <i class="fas fa-chalkboard-teacher fa-3x mb-3" style="color:#CBD5E1;"></i>
-        <h5 class="fw-bold" style="color:#0F172A;">Chưa có giảng viên nào</h5>
-        <p style="color:#94A3B8;margin-bottom:20px;">Thêm giảng viên đầu tiên để bắt đầu quản lý.</p>
+        <h5 class="fw-bold" style="color:#0F172A;">{% if search_query %}Không tìm thấy giảng viên phù hợp{% else %}Chưa có giảng viên nào{% endif %}</h5>
+        <p style="color:#94A3B8;margin-bottom:20px;">{% if search_query %}Thử lại với tên hoặc số điện thoại khác.{% else %}Thêm giảng viên đầu tiên để bắt đầu quản lý.{% endif %}</p>
         <div>
           <a href="{% url 'teacher_add' %}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Thêm giảng viên

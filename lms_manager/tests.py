@@ -1,4 +1,5 @@
 import json
+import io
 from pathlib import Path
 from unittest.mock import patch
 from django.test import TestCase, override_settings
@@ -6,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import translation
-from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch
+from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, TeacherSettlement
 from lms_manager.views import assign_teacher_to_classroom
 
 
@@ -62,7 +63,19 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(unpaid.count(), 1)
         self.assertEqual(unpaid.first().student, self.student2)
 
-    def test_student_list_status_is_derived_from_recorded_payments(self):
+    def test_teacher_list_searches_by_name_and_phone(self):
+        other_teacher = Teacher.objects.create(name='Ms. Jones', phone='0988111222')
+
+        with translation.override('en'):
+            by_name = self.client.get(reverse('teacher_list'), {'q': 'smith'})
+            by_phone = self.client.get(reverse('teacher_list'), {'q': '111222'})
+
+        self.assertContains(by_name, self.teacher.name)
+        self.assertNotContains(by_name, other_teacher.name)
+        self.assertContains(by_phone, other_teacher.name)
+        self.assertNotContains(by_phone, self.teacher.name)
+
+    def test_student_list_paid_amount_is_derived_from_recorded_payments(self):
         self.payment_period.name = "Đợt 1"
         self.payment_period.save()
         self.student1.dot_1 = "Chưa đóng"
@@ -73,8 +86,9 @@ class LMSManagerQueryTest(TestCase):
         with translation.override('en'):
             response = self.client.get(reverse('student_list'))
 
-        self.assertContains(response, 'Đã đóng', count=1)
-        self.assertNotContains(response, 'data-student-id=')
+        self.assertContains(response, '100000 VNĐ', count=1)
+        self.assertNotContains(response, '>Đã đóng<')
+        self.assertNotContains(response, 'togglePaymentStatus')
         self.assertNotContains(response, 'togglePaymentStatus')
 
     def test_manual_payment_status_endpoint_cannot_change_payment_data(self):
@@ -140,6 +154,146 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(list(self.classroom.teachers.all()), [self.teacher])
         self.assertFalse(Enrollment.objects.filter(student=unassigned_student, teacher=other_teacher).exists())
         self.assertTrue(Enrollment.objects.filter(student=unassigned_student, teacher=self.teacher).exists())
+
+    def test_teacher_can_remove_student_from_its_class_without_deleting_student_or_payments(self):
+        with translation.override('en'):
+            response = self.client.post(
+                reverse(
+                    'teacher_classroom_student_remove',
+                    args=[self.teacher.id, self.classroom.id, self.student1.id],
+                ),
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.student1.refresh_from_db()
+        self.assertIsNone(self.student1.classroom)
+        self.assertFalse(Enrollment.objects.filter(student=self.student1, teacher=self.teacher).exists())
+        self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
+
+    def test_classroom_detail_shows_paid_amount_instead_of_paid_status(self):
+        with translation.override('en'):
+            response = self.client.get(reverse('classroom_detail', args=[self.classroom.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '100000 VNĐ')
+        self.assertContains(response, 'Đợt 1: đã đóng')
+        self.assertContains(response, 'data-paid-1="1"')
+        self.assertContains(response, 'data-paid-2="0"')
+        self.assertContains(response, 'getAttribute(`data-paid-${period}`)')
+        self.assertContains(
+            response,
+            f'/teachers/{self.teacher.id}/classes/{self.classroom.id}/students/{self.student1.id}/remove/',
+        )
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_teacher_can_settle_multiple_periods_once_and_download_excel(self, _payment_pdf):
+        second_period = PaymentPeriod.objects.create(
+            name='Period 2', teacher=self.teacher, subject=self.subject
+        )
+        Payment.objects.create(
+            student=self.student2,
+            classroom=self.classroom,
+            subject=self.subject,
+            teacher=self.teacher,
+            payment_period=second_period,
+            amount=150000,
+        )
+
+        with translation.override('en'):
+            preview = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1, 2]},
+            )
+            response = self.client.post(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1, 2]},
+            )
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, '250000')
+        self.assertContains(preview, 'Đợt 1')
+        self.assertContains(preview, 'Đợt 8')
+        self.assertContains(preview, '100000 VNĐ')
+        self.assertContains(preview, '150000 VNĐ')
+        self.assertEqual(response.status_code, 302)
+        settlement = TeacherSettlement.objects.get()
+        self.assertEqual(settlement.revenue, 250000)
+        self.assertEqual(settlement.teacher_amount, 200000)
+        self.assertEqual(settlement.payments.count(), 2)
+
+        export = self.client.get(response['Location'])
+        self.assertEqual(export.status_code, 200)
+        self.assertEqual(
+            export['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertTrue(export.content.startswith(b'PK'))
+        from openpyxl import load_workbook
+        worksheet = load_workbook(io.BytesIO(export.content), data_only=True).active
+        self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN GIẢNG VIÊN - Mr. Smith')
+        self.assertEqual(worksheet['E8'].value, 250000)
+        self.assertEqual(worksheet['E10'].value, 200000)
+
+        with translation.override('en'):
+            after_settlement = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+            )
+        self.assertContains(after_settlement, 'Đợt 1')
+        self.assertContains(after_settlement, 'Đợt 8')
+
+        with translation.override('en'):
+            settled_preview = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1]},
+            )
+        self.assertContains(settled_preview, 'Đã quyết toán')
+        self.assertNotContains(settled_preview, 'Xác nhận quyết toán &amp; tải Excel', html=True)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_late_payment_in_a_settled_period_can_be_settled_without_old_payments(self, _payment_pdf):
+        with translation.override('en'):
+            self.client.post(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1]},
+            )
+        first_settlement = TeacherSettlement.objects.get()
+        self.assertEqual(first_settlement.payments.count(), 1)
+
+        late_payment = Payment.objects.create(
+            student=self.student2,
+            classroom=self.classroom,
+            subject=self.subject,
+            teacher=self.teacher,
+            payment_period=self.payment_period,
+            amount=120000,
+        )
+        with translation.override('en'):
+            preview = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1]},
+            )
+            self.client.post(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1]},
+            )
+
+        self.assertContains(preview, '120000')
+        self.assertEqual(TeacherSettlement.objects.count(), 2)
+        late_settlement = TeacherSettlement.objects.exclude(pk=first_settlement.pk).get()
+        self.assertEqual(list(late_settlement.payments.all()), [late_payment])
+        self.assertEqual(late_settlement.revenue, 120000)
+
+    def test_settlement_shows_empty_message_for_a_period_without_payments(self):
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [8]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Đợt 1')
+        self.assertContains(response, 'Đợt 8')
+        self.assertContains(response, 'Không có khoản thu chưa quyết toán trong các đợt đã chọn.')
 
     @patch('lms_manager.models.PaymentBatch.generate_receipt_pdf')
     @patch('lms_manager.models.Payment.generate_receipt_pdf')

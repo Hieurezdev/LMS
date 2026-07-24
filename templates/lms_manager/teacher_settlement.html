@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Quyết toán {{ teacher.name }} - {{ classroom.name }}{% endblock title %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  <div class="page-header mb-4">
+    <div class="page-header-left">
+      <h1 style="font-size:20px;"><i class="fas fa-hand-holding-usd text-primary me-2"></i>Quyết toán học phí</h1>
+      <p>{{ teacher.name }} · Lớp {{ classroom.name }} · Chỉ hiển thị các khoản đã thu nhưng chưa quyết toán.</p>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'teacher_detail' teacher.id %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Quay lại giảng viên
+      </a>
+    </div>
+  </div>
+
+  <form method="get" class="card p-4 mb-4 border-0 shadow-sm">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+      <div>
+        <h6 class="fw-bold mb-1">Chọn đợt cần quyết toán</h6>
+        <div class="text-secondary small">Hiển thị đủ 8 đợt. Nếu học sinh đóng muộn, chỉ khoản thu mới chưa quyết toán được tính.</div>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fas fa-filter me-1"></i> Xem doanh thu</button>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% for period in period_options %}
+      <label class="btn btn-outline-primary rounded-3 px-3 py-2 {% if period.number in selected_period_numbers %}active{% endif %}">
+        <input class="form-check-input me-2" type="checkbox" name="period" value="{{ period.number }}" {% if period.number in selected_period_numbers %}checked{% endif %}>
+        {{ period.name }}
+      </label>
+      {% endfor %}
+    </div>
+  </form>
+
+  {% if selected_period_numbers %}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="stat-card h-100" style="border-left:4px solid #16A34A;">
+        <div class="stat-label">Doanh thu chờ quyết toán</div>
+        <div class="stat-value text-success mt-1">{{ revenue|floatformat:0 }}</div>
+        <div class="small text-secondary mt-1">{{ payment_count }} lượt đóng · VNĐ</div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="stat-card h-100" style="border-left:4px solid #2563EB;">
+        <div class="stat-label">Giảng viên thực nhận ({{ teacher_share_rate|floatformat:0 }}%)</div>
+        <div class="stat-value text-primary mt-1">{{ teacher_amount|floatformat:0 }}</div>
+        <div class="small text-secondary mt-1">VNĐ</div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="stat-card h-100" style="border-left:4px solid #D97706;">
+        <div class="stat-label">Số tiền cần quyết toán</div>
+        <div class="stat-value" style="color:#D97706;">{{ teacher_amount|floatformat:0 }}</div>
+        <div class="small text-secondary mt-1">Sau khi chốt, khoản này sẽ được trừ khỏi số chờ quyết toán.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm overflow-hidden">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 p-3 border-bottom">
+      <div>
+        <h6 class="fw-bold mb-1">Danh sách học sinh đã đóng</h6>
+        <div class="small text-secondary">Tổng hợp theo từng học sinh trong các đợt đã chọn.</div>
+      </div>
+      {% if payment_count %}
+      <form method="post">
+        {% csrf_token %}
+        {% for period_number in selected_period_numbers %}<input type="hidden" name="period" value="{{ period_number }}">{% endfor %}
+        <button type="submit" class="btn btn-success">
+          <i class="fas fa-check-circle me-1"></i> Xác nhận quyết toán &amp; tải Excel
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% if student_rows %}
+    <div class="table-responsive">
+      <table class="lms-table table table-hover align-middle mb-0" style="font-size:13px;">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center" style="width:70px;">STT</th>
+            <th>Học sinh</th>
+            <th style="width:145px;">SĐT</th>
+            {% for period in period_options %}
+            <th class="text-center" style="min-width:125px;">{{ period.name }}</th>
+            {% endfor %}
+            <th class="text-end" style="min-width:145px;">Tổng đã đóng</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in student_rows %}
+          <tr>
+            <td class="text-center">{{ forloop.counter }}</td>
+            <td class="fw-semibold">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#EEF1FE;color:#4F6EF7;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">
+                {{ row.student_name|first|upper }}
+              </span>{{ row.student_name }}
+            </td>
+            <td>{{ row.phone|default:'-' }}</td>
+            {% for state in row.period_states %}
+            <td class="text-center">
+              {% if state.status == 'unsettled' %}
+              <span class="badge bg-success text-white" style="font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-check-circle me-1"></i>{{ state.amount|floatformat:0 }} VNĐ</span>
+              {% elif state.status == 'settled' %}
+              <span class="badge" style="background:#EDE9FE;color:#6D28D9;border:1px solid #C4B5FD;font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-hand-holding-usd me-1"></i>Đã quyết toán</span>
+              {% else %}
+              <span class="badge bg-light text-secondary border" style="font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-clock me-1"></i>Chưa đóng</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-end fw-bold text-success">{{ row.amount|floatformat:0 }} VNĐ</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-5 text-center text-secondary">
+      <i class="fas fa-info-circle text-warning fa-2x mb-2"></i>
+      <p class="mb-0">Không có khoản thu chưa quyết toán trong các đợt đã chọn.</p>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock content %}

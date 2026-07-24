@@ -27,8 +27,11 @@ urlpatterns = [
     path('teachers/<int:pk>/edit/', views.teacher_update, name='teacher_edit'),
     path('teachers/<int:pk>/delete/', views.teacher_delete, name='teacher_delete'),
     path('teachers/<int:pk>/add-classroom/', views.teacher_add_classroom, name='teacher_add_classroom'),
+    path('teachers/<int:teacher_id>/classes/<int:classroom_id>/students/<int:student_id>/remove/', views.teacher_classroom_student_remove, name='teacher_classroom_student_remove'),
     path('teachers/<int:pk>/import-excel/', views.teacher_import_excel, name='teacher_import_excel'),
     path('teachers/import-template/', views.teacher_import_template, name='teacher_import_template'),
+    path('teachers/<int:teacher_id>/classes/<int:classroom_id>/settlement/', views.teacher_class_settlement, name='teacher_class_settlement'),
+    path('teacher-settlements/<int:pk>/export/', views.teacher_settlement_export, name='teacher_settlement_export'),
     
     # Student
     path('students/', views.student_list, name='student_list'),

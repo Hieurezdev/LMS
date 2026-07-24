@@ -8,11 +8,11 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.db import transaction, DatabaseError
 from django.contrib import messages
 from django.utils import timezone
-from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod, PaymentBatch
+from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod, PaymentBatch, TeacherSettlement
 from .forms import ClassRoomForm, SubjectForm, TeacherForm, StudentForm, EnrollmentForm, PaymentForm, PaymentPeriodForm
 
 # -------------------------------------------------------------
@@ -346,8 +346,16 @@ def subject_delete(request, pk):
 # TEACHER CRUD
 # -------------------------------------------------------------
 def teacher_list(request):
-    teachers = Teacher.objects.all().order_by('name')
-    return render(request, 'lms_manager/teacher_list.html', {'teachers': teachers})
+    search_query = request.GET.get('q', '').strip()
+    teachers = Teacher.objects.all().prefetch_related('subjects', 'classes')
+    if search_query:
+        teachers = teachers.filter(
+            Q(name__icontains=search_query) | Q(phone__icontains=search_query)
+        )
+    return render(request, 'lms_manager/teacher_list.html', {
+        'teachers': teachers.order_by('name'),
+        'search_query': search_query,
+    })
 
 def teacher_create(request):
     if request.method == 'POST':
@@ -669,21 +677,7 @@ def student_list(request):
         
     students = students.order_by('classroom__name', 'name')
 
-    # The payment columns are a read-only projection of recorded receipts.  Do
-    # not trust the legacy ``dot_*`` fields here: they may have been changed by
-    # the old manual-toggle UI and are not proof that tuition was collected.
-    for student in students:
-        paid_periods = {
-            int(match.group(1))
-            for payment in student.payments.all()
-            if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
-        }
-        for period_num in range(1, 9):
-            setattr(
-                student,
-                f'dot_{period_num}',
-                'Đã đóng' if period_num in paid_periods else 'Chưa đóng',
-            )
+    attach_payment_period_amounts(students)
     
     return render(request, 'lms_manager/student_list.html', {
         'students': students,
@@ -691,6 +685,22 @@ def student_list(request):
         'search_name': search_name,
         'selected_classroom_id': classroom_id,
     })
+
+
+def attach_payment_period_amounts(students, teacher=None):
+    """Expose paid amounts by numbered period for read-only student tables."""
+    period_pattern = re.compile(r'(?:Đợt|Period)\s+([1-8])', re.IGNORECASE)
+    for student in students:
+        amounts = {period_num: Decimal('0') for period_num in range(1, 9)}
+        for payment in student.payments.all():
+            if teacher and payment.teacher_id != teacher.id:
+                continue
+            match = period_pattern.fullmatch(payment.payment_period.name.strip())
+            if match:
+                period_num = int(match.group(1))
+                amounts[period_num] += payment.amount
+        for period_num, amount in amounts.items():
+            setattr(student, f'payment_amount_{period_num}', amount or None)
 
 def student_create(request):
     next_url = request.GET.get('next') or request.POST.get('next', '')
@@ -1392,13 +1402,17 @@ def teacher_detail(request, pk):
         enrollments = Enrollment.objects.filter(
             student__classroom=cls,
             teacher=teacher
-        ).select_related('student', 'subject').order_by('student__name')
+        ).select_related('student', 'subject').prefetch_related(
+            'student__payments__payment_period'
+        ).order_by('student__name')
         
         students_list = []
         for e in enrollments:
             student = e.student
             student.enrolled_subject = e.subject.name
             students_list.append(student)
+
+        attach_payment_period_amounts(students_list, teacher=teacher)
             
         classroom_reports.append({
             'classroom': cls,
@@ -1408,6 +1422,8 @@ def teacher_detail(request, pk):
         
     total_earned = Payment.objects.filter(teacher=teacher).aggregate(total=Sum('amount'))['total'] or 0
     total_net_earned = float(total_earned) * 0.8
+    total_settled = TeacherSettlement.objects.filter(teacher=teacher).aggregate(total=Sum('teacher_amount'))['total'] or 0
+    total_pending_settlement = Decimal(str(total_net_earned)) - total_settled
     
     return render(request, 'lms_manager/teacher_detail.html', {
         'teacher': teacher,
@@ -1415,8 +1431,227 @@ def teacher_detail(request, pk):
         'classroom_reports': classroom_reports,
         'total_earned': total_earned,
         'total_net_earned': total_net_earned,
+        'total_settled': total_settled,
+        'total_pending_settlement': max(total_pending_settlement, Decimal('0')),
         'existing_classrooms': ClassRoom.objects.all().order_by('name'),
     })
+
+
+@require_POST
+def teacher_classroom_student_remove(request, teacher_id, classroom_id, student_id):
+    """Remove a student from a teacher's class without deleting their record or payments."""
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
+    student = get_object_or_404(Student, pk=student_id, classroom=classroom)
+
+    Enrollment.objects.filter(student=student, teacher=teacher).delete()
+    student.classroom = None
+    student.save(update_fields=['classroom'])
+    messages.success(request, f'Đã đưa {student.name} ra khỏi lớp {classroom.name}. Hồ sơ và các phiếu thu đã được giữ lại.')
+    return redirect('teacher_detail', pk=teacher.pk)
+
+
+TEACHER_SETTLEMENT_RATE = Decimal('0.80')
+SETTLEMENT_PERIOD_NUMBERS = tuple(range(1, 9))
+SETTLEMENT_PERIOD_PATTERN = re.compile(r'(?:Đợt|Period)\s+([1-8])', re.IGNORECASE)
+
+
+def _payment_period_number(payment_period):
+    match = SETTLEMENT_PERIOD_PATTERN.fullmatch(payment_period.name.strip())
+    return int(match.group(1)) if match else None
+
+
+def _teacher_class_payments(teacher, classroom, period_numbers=None, unsettled_only=False):
+    """Return tuition records for a teacher/class, optionally only unsettled ones."""
+    payments = Payment.objects.filter(
+        teacher=teacher,
+        classroom=classroom,
+    ).select_related('student', 'payment_period').order_by('student__name', 'payment_date', 'id')
+    if unsettled_only:
+        payments = payments.filter(teacher_settlements__isnull=True)
+    if period_numbers:
+        selected_numbers = set(period_numbers)
+        matching_period_ids = [
+            period.id
+            for period in PaymentPeriod.objects.filter(teacher=teacher)
+            if _payment_period_number(period) in selected_numbers
+        ]
+        payments = payments.filter(payment_period_id__in=matching_period_ids)
+    return payments
+
+
+def _unsettled_teacher_payments(teacher, classroom, period_numbers=None):
+    return _teacher_class_payments(teacher, classroom, period_numbers, unsettled_only=True)
+
+
+def _settlement_student_rows(payments, period_numbers=None):
+    rows = {}
+    for payment in payments:
+        row = rows.setdefault(payment.student_id, {
+            'student_name': payment.student.name,
+            'phone': payment.student.phone or '',
+            'period_names': [],
+            'amounts_by_period_number': {},
+            'settled_amounts_by_period_number': {},
+            'unsettled_amounts_by_period_number': {},
+            'amount': Decimal('0'),
+        })
+        row['amount'] += payment.amount
+        period_number = _payment_period_number(payment.payment_period)
+        if period_number:
+            row['amounts_by_period_number'][period_number] = (
+                row['amounts_by_period_number'].get(period_number, Decimal('0')) + payment.amount
+            )
+            if payment.teacher_settlements.exists():
+                row['settled_amounts_by_period_number'][period_number] = (
+                    row['settled_amounts_by_period_number'].get(period_number, Decimal('0')) + payment.amount
+                )
+            else:
+                row['unsettled_amounts_by_period_number'][period_number] = (
+                    row['unsettled_amounts_by_period_number'].get(period_number, Decimal('0')) + payment.amount
+                )
+        if payment.payment_period.name not in row['period_names']:
+            row['period_names'].append(payment.payment_period.name)
+    ordered_rows = list(sorted(rows.values(), key=lambda row: row['student_name'].lower()))
+    if period_numbers:
+        for row in ordered_rows:
+            row['period_states'] = []
+            for period_number in period_numbers:
+                if amount := row['unsettled_amounts_by_period_number'].get(period_number):
+                    row['period_states'].append({'status': 'unsettled', 'amount': amount})
+                elif amount := row['settled_amounts_by_period_number'].get(period_number):
+                    row['period_states'].append({'status': 'settled', 'amount': amount})
+                else:
+                    row['period_states'].append({'status': 'unpaid', 'amount': None})
+    return ordered_rows
+
+
+def teacher_class_settlement(request, teacher_id, classroom_id):
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
+    selected_period_numbers = [
+        int(value) for value in request.GET.getlist('period')
+        if value.isdigit() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+    ]
+    period_options = [
+        {'number': period_number, 'name': f'Đợt {period_number}'}
+        for period_number in SETTLEMENT_PERIOD_NUMBERS
+    ]
+
+    if request.method == 'POST':
+        selected_period_numbers = [
+            int(value) for value in request.POST.getlist('period')
+            if value.isdigit() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+        ]
+        if not selected_period_numbers:
+            messages.error(request, 'Hãy chọn ít nhất một đợt cần quyết toán.')
+        else:
+            with transaction.atomic():
+                payment_ids = list(_unsettled_teacher_payments(
+                    teacher, classroom, selected_period_numbers
+                ).values_list('id', flat=True))
+                # Lock only Payment rows.  The unsettled check uses a LEFT JOIN
+                # through the settlement M2M table, which PostgreSQL cannot lock.
+                payments = list(Payment.objects.select_for_update(of=('self',)).filter(
+                    id__in=payment_ids,
+                    teacher=teacher,
+                    classroom=classroom,
+                    teacher_settlements__isnull=True,
+                ).select_related('student', 'payment_period').order_by('student__name', 'id'))
+                if not payments:
+                    messages.error(request, 'Các đợt đã chọn không còn khoản thu nào cần quyết toán.')
+                else:
+                    revenue = sum((payment.amount for payment in payments), Decimal('0'))
+                    teacher_amount = (revenue * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1'))
+                    settlement = TeacherSettlement.objects.create(
+                        teacher=teacher,
+                        classroom=classroom,
+                        revenue=revenue,
+                        teacher_share_rate=TEACHER_SETTLEMENT_RATE,
+                        teacher_amount=teacher_amount,
+                    )
+                    settlement.payments.add(*payments)
+                    messages.success(request, 'Đã quyết toán cho giảng viên. File Excel đang được tải xuống.')
+                    return redirect('teacher_settlement_export', pk=settlement.pk)
+
+    selected_payments = list(_unsettled_teacher_payments(
+        teacher, classroom, selected_period_numbers
+    )) if selected_period_numbers else []
+    display_payments = list(_teacher_class_payments(
+        teacher, classroom, selected_period_numbers
+    ).prefetch_related('teacher_settlements')) if selected_period_numbers else []
+    revenue = sum((payment.amount for payment in selected_payments), Decimal('0'))
+    teacher_amount = (revenue * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1'))
+    return render(request, 'lms_manager/teacher_settlement.html', {
+        'teacher': teacher,
+        'classroom': classroom,
+        'period_options': period_options,
+        'selected_period_numbers': selected_period_numbers,
+        'student_rows': _settlement_student_rows(display_payments, SETTLEMENT_PERIOD_NUMBERS),
+        'payment_count': len(selected_payments),
+        'revenue': revenue,
+        'teacher_amount': teacher_amount,
+        'teacher_share_rate': TEACHER_SETTLEMENT_RATE * 100,
+    })
+
+
+def teacher_settlement_export(request, pk):
+    settlement = get_object_or_404(
+        TeacherSettlement.objects.select_related('teacher', 'classroom'), pk=pk
+    )
+    # openpyxl is already a project dependency and is used for the existing Excel import flow.
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    rows = _settlement_student_rows(settlement.payments.select_related(
+        'student', 'payment_period'
+    ).order_by('student__name', 'payment_date', 'id'))
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Quyet toan'
+    sheet.sheet_view.showGridLines = False
+    sheet.merge_cells('A1:E1')
+    sheet['A1'] = f'QUYẾT TOÁN GIẢNG VIÊN - {settlement.teacher.name}'
+    sheet['A1'].font = Font(bold=True, size=14, color='FFFFFF')
+    sheet['A1'].fill = PatternFill('solid', fgColor='1D4ED8')
+    sheet['A1'].alignment = Alignment(horizontal='center')
+    sheet.append(['Lớp', settlement.classroom.name])
+    sheet.append(['Ngày quyết toán', timezone.localtime(settlement.settled_at).strftime('%d/%m/%Y %H:%M')])
+    sheet.append([])
+    header_row = 5
+    headers = ['STT', 'Học sinh', 'SĐT', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
+    sheet.append(headers)
+    for cell in sheet[header_row]:
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='0F766E')
+        cell.alignment = Alignment(horizontal='center')
+    for index, row in enumerate(rows, start=1):
+        sheet.append([index, row['student_name'], row['phone'], ', '.join(row['period_names']), int(row['amount'])])
+        sheet.cell(row=header_row + index, column=5).number_format = '#,##0'
+    total_row = header_row + len(rows) + 1
+    sheet.cell(row=total_row, column=4, value='Tổng doanh thu')
+    sheet.cell(row=total_row, column=5, value=int(settlement.revenue))
+    sheet.cell(row=total_row + 1, column=4, value='Tỷ lệ giảng viên nhận')
+    sheet.cell(row=total_row + 1, column=5, value=float(settlement.teacher_share_rate))
+    sheet.cell(row=total_row + 1, column=5).number_format = '0%'
+    sheet.cell(row=total_row + 2, column=4, value='Tổng tiền giảng viên nhận')
+    sheet.cell(row=total_row + 2, column=5, value=int(settlement.teacher_amount))
+    for row_number in range(total_row, total_row + 3):
+        sheet.cell(row=row_number, column=4).font = Font(bold=True)
+        sheet.cell(row=row_number, column=5).font = Font(bold=True)
+        sheet.cell(row=row_number, column=5).number_format = '#,##0' if row_number != total_row + 1 else '0%'
+    for column, width in {'A': 8, 'B': 28, 'C': 18, 'D': 32, 'E': 24}.items():
+        sheet.column_dimensions[column].width = width
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    filename = f'quyet_toan_{settlement.teacher.name}_{settlement.classroom.name}_{settlement.pk}.xlsx'
+    response['Content-Disposition'] = f"attachment; filename*=UTF-8''{filename}"
+    return response
 
 
 
@@ -1433,13 +1668,17 @@ def classroom_detail(request, pk):
         enrollments = Enrollment.objects.filter(
             student__classroom=classroom,
             teacher=t
-        ).select_related('student', 'subject').order_by('student__name')
+        ).select_related('student', 'subject').prefetch_related(
+            'student__payments__payment_period'
+        ).order_by('student__name')
         
         students_list = []
         for e in enrollments:
             student = e.student
             student.enrolled_subject = e.subject.name
             students_list.append(student)
+
+        attach_payment_period_amounts(students_list, teacher=t)
             
         teacher_reports.append({
             'teacher': t,

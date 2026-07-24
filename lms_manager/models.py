@@ -260,3 +260,45 @@ class PaymentBatch(models.Model):
             filename = f"batch_receipt_{self.id}.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
+
+
+class TeacherSettlement(models.Model):
+    """A confirmed payout for one teacher in one classroom."""
+    teacher = models.ForeignKey(
+        Teacher,
+        on_delete=models.PROTECT,
+        related_name='settlements',
+        verbose_name="Giảng viên",
+    )
+    classroom = models.ForeignKey(
+        ClassRoom,
+        on_delete=models.PROTECT,
+        related_name='teacher_settlements',
+        verbose_name="Lớp",
+    )
+    payments = models.ManyToManyField(
+        Payment,
+        related_name='teacher_settlements',
+        verbose_name="Các khoản học phí",
+    )
+    revenue = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Doanh thu")
+    teacher_share_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default='0.8000',
+        verbose_name="Tỷ lệ giảng viên nhận",
+    )
+    teacher_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        verbose_name="Số tiền quyết toán cho giảng viên",
+    )
+    settled_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời điểm quyết toán")
+
+    class Meta:
+        verbose_name = "Quyết toán giảng viên"
+        verbose_name_plural = "Quyết toán giảng viên"
+        ordering = ['-settled_at']
+
+    def __str__(self):
+        return f"Quyết toán #{self.pk} - {self.teacher.name} - {self.classroom.name}"

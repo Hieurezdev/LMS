@@ -1,0 +1,11 @@
+{% if amount %}
+<span class="badge payment-toggle-badge bg-success text-white"
+      data-student-id="{{ student_id }}" data-period="{{ period_num }}"
+      title="Số tiền đã thu – nhấp để xem biên lai" style="font-size:11px;padding:4px 8px;cursor:pointer;transition:all .2s ease-in-out;white-space:nowrap;">
+  <i class="fas fa-check-circle me-1"></i>{{ amount|floatformat:0 }} VNĐ
+</span>
+{% else %}
+<span class="badge bg-light text-secondary border" title="Chưa ghi nhận học phí" style="font-size:11px;padding:4px 8px;white-space:nowrap;">
+  <i class="fas fa-clock me-1"></i>Chưa đóng
+</span>
+{% endif %}

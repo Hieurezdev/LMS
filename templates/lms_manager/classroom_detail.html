@@ -143,8 +143,15 @@
                       {{ report.count }} học sinh
                     </span>
                 </div>
-                <div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
                     {% if report.count > 0 %}
+                    <select class="form-select form-select-sm classroom-payment-filter" data-teacher-id="{{ report.teacher.id }}" style="width:auto;min-width:165px;">
+                        <option value="all">Tất cả học sinh</option>
+                        {% for period_num in '12345678' %}
+                        <option value="paid-{{ period_num }}">Đợt {{ period_num }}: đã đóng</option>
+                        <option value="unpaid-{{ period_num }}">Đợt {{ period_num }}: chưa đóng</option>
+                        {% endfor %}
+                    </select>
                     <button onclick="exportToCSV('table-teacher-{{ report.teacher.id }}', '{{ report.teacher.name|escapejs }}')" class="btn btn-outline-success btn-sm rounded-3">
                         <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
                     </button>
@@ -179,7 +186,15 @@
                     </thead>
                     <tbody>
                         {% for s in report.students %}
-                        <tr>
+                        <tr class="classroom-student-row"
+                            data-paid-1="{% if s.payment_amount_1 %}1{% else %}0{% endif %}"
+                            data-paid-2="{% if s.payment_amount_2 %}1{% else %}0{% endif %}"
+                            data-paid-3="{% if s.payment_amount_3 %}1{% else %}0{% endif %}"
+                            data-paid-4="{% if s.payment_amount_4 %}1{% else %}0{% endif %}"
+                            data-paid-5="{% if s.payment_amount_5 %}1{% else %}0{% endif %}"
+                            data-paid-6="{% if s.payment_amount_6 %}1{% else %}0{% endif %}"
+                            data-paid-7="{% if s.payment_amount_7 %}1{% else %}0{% endif %}"
+                            data-paid-8="{% if s.payment_amount_8 %}1{% else %}0{% endif %}">
                             <td class="text-center fw-semibold text-secondary">{{ forloop.counter }}</td>
                             <td class="text-start">
                                 <a href="{% url 'student_detail' s.id %}" class="fw-semibold text-dark text-decoration-none d-block">
@@ -196,60 +211,28 @@
                             
                             <!-- Đợt 1 -> 8 Status Toggles -->
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_1 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="1" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_1 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_1 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_1 student_id=s.id period_num=1 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_2 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="2" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_2 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_2 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_2 student_id=s.id period_num=2 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_3 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="3" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_3 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_3 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_3 student_id=s.id period_num=3 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_4 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="4" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_4 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_4 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_4 student_id=s.id period_num=4 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_5 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="5" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_5 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_5 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_5 student_id=s.id period_num=5 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_6 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="6" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_6 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_6 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_6 student_id=s.id period_num=6 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_7 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="7" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_7 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_7 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_7 student_id=s.id period_num=7 %}
                             </td>
                             <td class="text-center">
-                                <span class="badge payment-toggle-badge {% if s.dot_8 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                                      data-student-id="{{ s.id }}" data-period="8" style="font-size: 11.5px; padding: 5px 10px; cursor: pointer; transition: all 0.2s ease-in-out;">
-                                    <i class="fas {% if s.dot_8 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                                    {{ s.dot_8 }}
-                                </span>
+                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_8 student_id=s.id period_num=8 %}
                             </td>
                             
                             <td class="text-center no-export">
@@ -263,6 +246,12 @@
                                     <a href="{% url 'student_edit' s.id %}" class="btn btn-outline-secondary btn-xs" title="Sửa">
                                       <i class="fas fa-edit"></i>
                                     </a>
+                                    <form method="post" action="{% url 'teacher_classroom_student_remove' report.teacher.id classroom.id s.id %}" class="d-inline" onsubmit="return confirm('Đưa {{ s.name|escapejs }} ra khỏi lớp {{ classroom.name|escapejs }}? Hồ sơ và phiếu thu vẫn được giữ lại.');">
+                                      {% csrf_token %}
+                                      <button type="submit" class="btn btn-outline-danger btn-xs" title="Đưa ra khỏi lớp">
+                                        <i class="fas fa-user-minus"></i>
+                                      </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>
@@ -343,6 +332,19 @@
         if (modalEl) {
             receiptModal = new bootstrap.Modal(modalEl);
         }
+
+        document.querySelectorAll('.classroom-payment-filter').forEach(filter => {
+            filter.addEventListener('change', function() {
+                const table = document.getElementById(`table-teacher-${this.dataset.teacherId}`);
+                if (!table) return;
+                const [status, period] = this.value.split('-');
+                table.querySelectorAll('.classroom-student-row').forEach(row => {
+                    const isPaid = row.getAttribute(`data-paid-${period}`) === '1';
+                    row.style.display = status === 'all' || (status === 'paid' && isPaid) ||
+                        (status === 'unpaid' && !isPaid) ? '' : 'none';
+                });
+            });
+        });
 
         document.querySelectorAll('.payment-toggle-badge').forEach(badge => {
             badge.addEventListener('click', function() {

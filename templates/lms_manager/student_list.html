@@ -150,60 +150,28 @@
             
             <!-- Đợt 1 -> 8 payment statuses (updated only from payment records) -->
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_1 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_1 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_1 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_1 student_id=s.id period_num=1 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_2 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_2 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_2 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_2 student_id=s.id period_num=2 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_3 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_3 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_3 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_3 student_id=s.id period_num=3 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_4 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_4 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_4 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_4 student_id=s.id period_num=4 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_5 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_5 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_5 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_5 student_id=s.id period_num=5 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_6 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_6 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_6 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_6 student_id=s.id period_num=6 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_7 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_7 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_7 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_7 student_id=s.id period_num=7 %}
             </td>
             <td class="text-center">
-                <span class="badge payment-toggle-badge {% if s.dot_8 == 'Đã đóng' %}bg-success text-white{% else %}bg-light text-secondary border{% endif %}"
-                      title="Trạng thái được cập nhật khi ghi nhận học phí" style="font-size: 11.5px; padding: 5px 8px;">
-                    <i class="fas {% if s.dot_8 == 'Đã đóng' %}fa-check-circle{% else %}fa-clock{% endif %} me-1"></i>
-                    {{ s.dot_8 }}
-                </span>
+              {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_8 student_id=s.id period_num=8 %}
             </td>
             
             <td class="text-center no-export">
