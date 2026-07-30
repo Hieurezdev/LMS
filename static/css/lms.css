@@ -536,9 +536,114 @@ a:hover { color: var(--primary-dark); }
 }
 
 @media (max-width: 768px) {
-  .page-header { flex-direction: column; }
-  .page-header-actions { width: 100%; }
-  #main { padding-top: calc(var(--navbar-h) + 4px); }
+  body { overflow-x: hidden; }
+
+  #main {
+    padding-top: calc(var(--navbar-h) + 4px);
+    padding-bottom: 1.5rem;
+  }
+  .container-fluid { padding-left: 12px; padding-right: 12px; }
+
+  #top-navbar { padding: 0 12px; }
+  .navbar-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  #top-navbar .ms-auto { margin-left: auto !important; }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .page-header-left h1 { font-size: 20px; }
+  .page-header-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+  .page-header-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+  .card, .table-card, .info-card, .stat-card { border-radius: 10px !important; }
+  .card.p-3, .info-card, .stat-card { padding: 14px !important; }
+  .stat-card .stat-value { font-size: 22px; }
+
+  .table-card-header,
+  .excel-table-header {
+    align-items: stretch !important;
+    padding: 12px !important;
+  }
+  .table-card-header > .d-flex,
+  .excel-table-header > .d-flex { width: 100%; }
+  .table-card-header select,
+  .excel-table-header select { width: 100% !important; }
+  .table-card-title { font-size: 12px; }
+
+  /* Keep wide reports readable: swipe the table instead of squeezing 8 periods. */
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .excel-table,
+  table.table { min-width: 820px; }
+  .lms-table { min-width: 1320px; }
+  .lms-table { font-size: 12px !important; }
+  .lms-table th { padding: 9px 10px; font-size: 10.5px; }
+  .lms-table td { padding: 10px; white-space: nowrap; }
+  .lms-table td .badge,
+  .lms-table td .status-badge { white-space: nowrap; }
+
+  .period-tabs,
+  .nav-pills {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .period-tab-btn,
+  .nav-pills .nav-item,
+  .nav-pills .nav-link { flex: 0 0 auto; }
+
+  .btn { min-height: 38px; justify-content: center; }
+  .btn-sm { min-height: 32px; }
+  form .row > [class*='col-'] { min-width: 0; }
+  .input-group { flex-wrap: nowrap; }
+  .form-control, .form-select { min-height: 40px; }
+
+  .modal-dialog { margin: 10px; }
+  .modal-body[style*='height'] { height: min(65vh, 500px) !important; }
+
+  /* Payment collection needs more usable width for its form controls. */
+  .payment-create-page { padding-left: 0; padding-right: 0; }
+  .payment-create-row { margin-left: 0; margin-right: 0; }
+  .payment-create-column { padding-left: 0; padding-right: 0; }
+  .payment-create-card { padding: 14px !important; }
+  .payment-create-header { margin-bottom: 18px !important; }
+  .payment-date-field { width: 100%; min-width: 0 !important; }
+  .payment-create-header .payment-date-field .form-control { width: 100%; }
+  .batch-payment-row { padding: 12px !important; }
+  .payment-create-actions {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .payment-create-actions .btn { width: 100%; }
+  .payment-create-actions .text-end { text-align: center !important; }
+}
+
+@media (max-width: 420px) {
+  #top-navbar { padding: 0 8px; }
+  .navbar-title { margin-left: 8px !important; font-size: 13px; }
+  .navbar-toggle-btn { flex: 0 0 36px; }
+  .container-fluid { padding-left: 8px; padding-right: 8px; }
+  .page-header-actions .btn { width: 100%; }
+  .table-card-header .badge { align-self: flex-start; }
+  .alert { padding: 12px; }
 }
 
 /* ── Sidebar toggle ── */
@@ -584,3 +689,54 @@ a:hover { color: var(--primary-dark); }
 
 /* ── Highlighted search ── */
 mark { background: #FEF08A; border-radius: 3px; padding: 0 2px; }
+
+/* These rules follow the legacy container compatibility rule above. */
+@media (max-width: 768px) {
+  .container-fluid { padding-left: 12px; padding-right: 12px; }
+  .payment-create-page { padding-left: 0; padding-right: 0; }
+}
+
+@media (max-width: 420px) {
+  .container-fluid { padding-left: 8px; padding-right: 8px; }
+}
+
+/* Teacher detail: keep the financial summary to the right and reserve the
+   full row for the 8-period classroom list on desktop. */
+@media (min-width: 769px) {
+  .teacher-summary-column {
+    display: flex;
+    justify-content: flex-end;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .teacher-summary-column .stat-card,
+  .teacher-summary-column > .card:not(.teacher-add-class-card) {
+    width: 184px;
+    margin-bottom: 0 !important;
+  }
+  .teacher-summary-column .teacher-add-class-card {
+    width: 340px;
+    margin-right: auto;
+    margin-bottom: 0 !important;
+    display: flex;
+    align-items: center;
+  }
+  .teacher-summary-column .teacher-add-class-form {
+    width: 100%;
+  }
+  .teacher-student-table { font-size: 11px !important; }
+  .teacher-student-table th { padding: 8px 5px !important; font-size: 9.5px; }
+  .teacher-student-table td { padding: 8px 5px !important; }
+  .teacher-student-table th:nth-child(1) { width: 40px !important; }
+  .teacher-student-table th:nth-child(2) { width: 120px !important; }
+  .teacher-student-table th:nth-child(3) { width: 75px !important; }
+  .teacher-student-table th:nth-child(4) { width: 70px !important; }
+  .teacher-student-table th:nth-child(n+5):nth-child(-n+12) { width: 68px !important; }
+  .teacher-student-table th:nth-child(13) { width: 70px !important; }
+  .teacher-student-table .badge,
+  .teacher-student-table .status-badge { font-size: 10px; padding: 3px 5px; }
+  .teacher-student-table .payment-currency,
+  .teacher-student-table .payment-status-text { display: none; }
+  .teacher-student-table td:nth-child(n+5):nth-child(-n+12) .badge .fas { margin-right: 0 !important; }
+}

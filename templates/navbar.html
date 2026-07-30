@@ -1,7 +1,8 @@
 {% load i18n %}
 <div id="top-navbar">
   <!-- Toggle sidebar button -->
-  <button class="navbar-toggle-btn" onclick="toggleSidebar()" title="Mở/đóng menu">
+  <button class="navbar-toggle-btn" type="button" aria-controls="side-nav" aria-label="Mở hoặc đóng menu" title="Mở/đóng menu"
+    onclick="if (window.matchMedia('(max-width: 1024px)').matches) { var menu = document.getElementById('side-nav'); menu.classList.remove('toggle-active'); menu.classList.toggle('sidebar-open'); } else { toggleSidebar(); }">
     <i class="fas fa-bars" style="font-size:15px;"></i>
   </button>
 

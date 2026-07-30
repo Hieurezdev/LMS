@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}{{ teacher.name }} | Giảng viên{% endblock title %}
 
@@ -38,21 +39,36 @@
 
   <div class="row g-4">
 
-    <!-- Left column: Stats + Subjects -->
-    <div class="col-12 col-lg-3">
+    <!-- Summary band: aligned to the right above the classroom list -->
+    <div class="col-12 order-lg-1 teacher-summary-column">
+
+      <!-- Add a classroom in the open space beside the summary cards -->
+      <div class="card p-3 border-0 shadow-sm bg-light rounded-4 teacher-add-class-card">
+        <form method="POST" action="{% url 'teacher_add_classroom' teacher.id %}" class="teacher-add-class-form">
+          {% csrf_token %}
+          <label class="fw-bold text-dark mb-2" style="font-size:13.5px;">
+            <i class="fas fa-plus me-1 text-primary"></i>Thêm lớp dạy
+          </label>
+          <div class="input-group">
+            <input type="text" name="class_name" class="form-control rounded-start-3" placeholder="Nhập tên lớp..." list="classroom-list" autocomplete="off" required>
+            <button type="submit" class="btn btn-primary rounded-end-3"><i class="fas fa-plus"></i> Thêm</button>
+          </div>
+        </form>
+      </div>
 
       <!-- Revenue card -->
       <div class="stat-card mb-3" style="border-left:4px solid #22C55E;">
         <div class="stat-label">Tổng doanh thu</div>
-        <div class="stat-value text-success mt-1">{{ total_earned|floatformat:0 }}</div>
+        <div class="stat-value text-success mt-1">{{ total_earned|floatformat:0|intcomma }}</div>
         <div style="font-size:12px;color:#94A3B8;margin-top:2px;">VNĐ</div>
       </div>
 
-      <!-- Net received card -->
+      <!-- Teacher share card -->
       <div class="stat-card mb-4" style="border-left:4px solid #4F6EF7;">
-        <div class="stat-label">Chờ quyết toán (80%)</div>
-        <div class="stat-value text-primary mt-1">{{ total_pending_settlement|floatformat:0 }}</div>
-        <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Đã quyết toán: {{ total_settled|floatformat:0 }} VNĐ</div>
+        <div class="stat-label">Giảng viên thực nhận (80%)</div>
+        <div class="stat-value text-primary mt-1">{{ total_net_earned|floatformat:0|intcomma }}</div>
+        <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Cần quyết toán: {{ total_pending_settlement|floatformat:0|intcomma }} VNĐ</div>
+        <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Đã quyết toán: {{ total_settled|floatformat:0|intcomma }} VNĐ</div>
       </div>
 
       <!-- Subjects taught -->
@@ -72,28 +88,8 @@
 
     </div>
 
-    <!-- Right column: Classes list and student grids -->
-    <div class="col-12 col-lg-9">
-      
-      <!-- Thêm lớp dạy inline form -->
-      <div class="card p-3 mb-4 border-0 shadow-sm bg-light rounded-4">
-        <form method="POST" action="{% url 'teacher_add_classroom' teacher.id %}" class="row g-2 align-items-center">
-          {% csrf_token %}
-          <div class="col-auto">
-            <label class="fw-bold text-dark mb-0" style="font-size:13.5px;">
-              <i class="fas fa-plus me-1 text-primary"></i>Thêm lớp dạy:
-            </label>
-          </div>
-          <div class="col-12 col-md-5">
-            <input type="text" name="class_name" class="form-control rounded-3" placeholder="Nhập tên lớp (ví dụ: Toán 6A, 10A1)..." list="classroom-list" autocomplete="off" required>
-          </div>
-          <div class="col-auto">
-            <button type="submit" class="btn btn-primary px-3 rounded-3">
-              <i class="fas fa-plus"></i> Thêm lớp
-            </button>
-          </div>
-        </form>
-      </div>
+    <!-- Main column: full-width classes list and student grids -->
+    <div class="col-12 order-lg-2 teacher-classes-column">
 
       <!-- Datalist for classroom autocomplete -->
       <datalist id="classroom-list">
@@ -167,9 +163,9 @@
                   <i class="fas fa-file-excel me-1"></i> Import học sinh từ Excel
                 </a>
                 {% if report.count > 0 %}
-                <button onclick="exportToCSV('table-classroom-{{ report.classroom.id }}', '{{ report.classroom.name|escapejs }}')" class="btn btn-outline-success btn-sm rounded-3">
+                <a href="{% url 'classroom_export' report.classroom.id %}?teacher={{ teacher.id }}" class="btn btn-outline-success btn-sm rounded-3">
                   <i class="fas fa-file-excel me-1"></i> Xuất Excel lớp
-                </button>
+                </a>
                 {% endif %}
               </div>
             </div>
@@ -182,7 +178,7 @@
                 <p class="text-muted small">Hãy nhấn nút <strong>Import học sinh từ Excel</strong> ở trên để tải danh sách học sinh cho lớp này.</p>
               </div>
               {% else %}
-              <table class="lms-table table table-hover align-middle mb-0" id="table-classroom-{{ report.classroom.id }}" style="font-size: 13px;">
+              <table class="lms-table teacher-student-table table table-hover align-middle mb-0" id="table-classroom-{{ report.classroom.id }}" style="font-size: 13px;">
                 <thead class="table-light text-center">
                   <tr>
                     <th style="width: 50px;">STT</th>
@@ -214,13 +210,10 @@
                     <td class="text-center fw-semibold text-secondary">{{ forloop.counter }}</td>
                     <td class="text-start">
                       <a href="{% url 'student_detail' s.id %}" class="fw-semibold text-dark text-decoration-none d-block">
-                        <div style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#EEF1FE;color:#4F6EF7;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">
-                          {{ s.name|first|upper }}
-                        </div>
                         {{ s.name }}
                       </a>
                       {% if s.phone %}
-                      <div style="font-size:11px;color:#64748B;margin-top:2px;margin-left:36px;">
+                      <div style="font-size:11px;color:#64748B;margin-top:2px;">
                         <i class="fas fa-phone-alt" style="font-size:9.5px;color:#94A3B8;margin-right:2px;"></i> {{ s.phone }}
                       </div>
                       {% endif %}

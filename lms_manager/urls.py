@@ -9,8 +9,10 @@ urlpatterns = [
 
     # ClassRoom
     path('classes/', views.classroom_list, name='classroom_list'),
+    path('classes/export/', views.classroom_list_export, name='classroom_list_export'),
     path('classes/add/', views.classroom_create, name='classroom_add'),
     path('classes/<int:pk>/', views.classroom_detail, name='classroom_detail'),
+    path('classes/<int:pk>/export/', views.classroom_export, name='classroom_export'),
     path('classes/<int:pk>/edit/', views.classroom_update, name='classroom_edit'),
     path('classes/<int:pk>/delete/', views.classroom_delete, name='classroom_delete'),
     
@@ -35,8 +37,10 @@ urlpatterns = [
     
     # Student
     path('students/', views.student_list, name='student_list'),
+    path('students/export/', views.student_list_export, name='student_list_export'),
     path('students/add/', views.student_create, name='student_add'),
     path('students/<int:pk>/', views.student_detail, name='student_detail'),
+    path('students/<int:pk>/export/', views.student_export, name='student_export'),
     path('students/<int:pk>/edit/', views.student_update, name='student_edit'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
     path('students/<int:student_id>/register/', views.student_register, name='student_register'),

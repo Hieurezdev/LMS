@@ -2,13 +2,45 @@
 
 // side navigation bar
 function toggleSidebar() {
-  document.getElementById("side-nav").classList.toggle("toggle-active");
-  document.getElementById("main").classList.toggle("toggle-active");
-  document.getElementById("top-navbar").classList.toggle("toggle-active");
+  var sideNav = document.getElementById("side-nav");
+  var main = document.getElementById("main");
+  var topNavbar = document.getElementById("top-navbar");
+
+  // On tablet/mobile the navigation is an overlay.  The old desktop class
+  // keeps it off-screen there, so use the dedicated mobile state instead.
+  if (window.matchMedia("(max-width: 1024px)").matches) {
+    sideNav.classList.remove("toggle-active");
+    main.classList.remove("toggle-active");
+    topNavbar.classList.remove("toggle-active");
+    sideNav.classList.toggle("sidebar-open");
+    return;
+  }
+
+  sideNav.classList.remove("sidebar-open");
+  sideNav.classList.toggle("toggle-active");
+  main.classList.toggle("toggle-active");
+  topNavbar.classList.toggle("toggle-active");
   // .manage-wrap is hidden in new design; skip it if not present
   var mw = document.querySelector(".manage-wrap");
   if (mw) mw.classList.toggle("toggle-active");
 }
+
+function closeMobileSidebar() {
+  if (window.matchMedia("(max-width: 1024px)").matches) {
+    document.getElementById("side-nav").classList.remove("sidebar-open");
+  }
+}
+
+document.addEventListener("click", function (event) {
+  var sideNav = document.getElementById("side-nav");
+  var toggle = document.querySelector(".navbar-toggle-btn");
+  if (!sideNav || !toggle || !sideNav.classList.contains("sidebar-open")) return;
+  if (!sideNav.contains(event.target) && !toggle.contains(event.target)) closeMobileSidebar();
+});
+
+document.addEventListener("keydown", function (event) {
+  if (event.key === "Escape") closeMobileSidebar();
+});
 
 // #################################
 // popup

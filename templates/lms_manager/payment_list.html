@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}Giao dịch học phí{% endblock title %}
 
@@ -71,7 +72,7 @@
             <td>
               <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:4px 10px;">{{ p.payment_period.name }}</span>
             </td>
-            <td style="text-align:right;" class="fw-bold text-success">{{ p.amount|floatformat:0 }} VNĐ</td>
+            <td style="text-align:right;" class="fw-bold text-success">{{ p.amount|floatformat:0|intcomma }} VNĐ</td>
             <td style="color:#94A3B8;font-size:12.5px;">{{ p.payment_date|date:"d/m/Y" }}</td>
             <td style="text-align:right;">
               <div class="d-flex justify-content-end gap-1">

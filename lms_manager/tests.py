@@ -75,6 +75,30 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(by_phone, other_teacher.name)
         self.assertNotContains(by_phone, self.teacher.name)
 
+    def test_student_and_classroom_exports_are_formatted_xlsx_for_a4_printing(self):
+        export_specs = [
+            ('student_list_export', []),
+            ('student_export', [self.student1.id]),
+            ('classroom_list_export', []),
+            ('classroom_export', [self.classroom.id]),
+        ]
+        from openpyxl import load_workbook
+
+        for url_name, args in export_specs:
+            with self.subTest(url_name=url_name):
+                with translation.override('en'):
+                    url = reverse(url_name, args=args)
+                    response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(
+                    response['Content-Type'],
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                )
+                worksheet = load_workbook(io.BytesIO(response.content), data_only=True).active
+                self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
+                self.assertEqual(worksheet.page_setup.fitToWidth, 1)
+                self.assertEqual(worksheet.page_setup.fitToHeight, 1)
+
     def test_student_list_paid_amount_is_derived_from_recorded_payments(self):
         self.payment_period.name = "Đợt 1"
         self.payment_period.save()
@@ -86,7 +110,7 @@ class LMSManagerQueryTest(TestCase):
         with translation.override('en'):
             response = self.client.get(reverse('student_list'))
 
-        self.assertContains(response, '100000 VNĐ', count=1)
+        self.assertContains(response, '100,000 VNĐ', count=1)
         self.assertNotContains(response, '>Đã đóng<')
         self.assertNotContains(response, 'togglePaymentStatus')
         self.assertNotContains(response, 'togglePaymentStatus')
@@ -175,7 +199,7 @@ class LMSManagerQueryTest(TestCase):
             response = self.client.get(reverse('classroom_detail', args=[self.classroom.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '100000 VNĐ')
+        self.assertContains(response, '100,000 VNĐ')
         self.assertContains(response, 'Đợt 1: đã đóng')
         self.assertContains(response, 'data-paid-1="1"')
         self.assertContains(response, 'data-paid-2="0"')
@@ -210,11 +234,11 @@ class LMSManagerQueryTest(TestCase):
             )
 
         self.assertEqual(preview.status_code, 200)
-        self.assertContains(preview, '250000')
+        self.assertContains(preview, '250,000')
         self.assertContains(preview, 'Đợt 1')
         self.assertContains(preview, 'Đợt 8')
-        self.assertContains(preview, '100000 VNĐ')
-        self.assertContains(preview, '150000 VNĐ')
+        self.assertContains(preview, '100,000 VNĐ')
+        self.assertContains(preview, '150,000 VNĐ')
         self.assertEqual(response.status_code, 302)
         settlement = TeacherSettlement.objects.get()
         self.assertEqual(settlement.revenue, 250000)
@@ -233,6 +257,10 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN GIẢNG VIÊN - Mr. Smith')
         self.assertEqual(worksheet['E8'].value, 250000)
         self.assertEqual(worksheet['E10'].value, 200000)
+        self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
+        self.assertEqual(worksheet.page_setup.orientation, worksheet.ORIENTATION_LANDSCAPE)
+        self.assertEqual(worksheet.page_setup.fitToWidth, 1)
+        self.assertEqual(worksheet.page_setup.fitToHeight, 1)
 
         with translation.override('en'):
             after_settlement = self.client.get(
@@ -277,7 +305,7 @@ class LMSManagerQueryTest(TestCase):
                 {'period': [1]},
             )
 
-        self.assertContains(preview, '120000')
+        self.assertContains(preview, '120,000')
         self.assertEqual(TeacherSettlement.objects.count(), 2)
         late_settlement = TeacherSettlement.objects.exclude(pk=first_settlement.pk).get()
         self.assertEqual(list(late_settlement.payments.all()), [late_payment])

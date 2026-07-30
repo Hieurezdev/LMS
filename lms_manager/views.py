@@ -702,6 +702,189 @@ def attach_payment_period_amounts(students, teacher=None):
         for period_num, amount in amounts.items():
             setattr(student, f'payment_amount_{period_num}', amount or None)
 
+
+def formatted_excel_response(title, headers, rows, filename, details=None):
+    """Create a consistently formatted, single-page A4 XLSX download."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.page import PageMargins
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Danh sach'
+    sheet.sheet_view.showGridLines = False
+    column_count = len(headers)
+    last_column = get_column_letter(column_count)
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=column_count)
+    title_cell = sheet['A1']
+    title_cell.value = title
+    title_cell.font = Font(bold=True, size=14, color='FFFFFF')
+    title_cell.fill = PatternFill('solid', fgColor='1D4ED8')
+    title_cell.alignment = Alignment(horizontal='center', vertical='center')
+    sheet.row_dimensions[1].height = 28
+
+    next_row = 2
+    for label, value in details or []:
+        sheet.cell(row=next_row, column=1, value=label).font = Font(bold=True, color='334155')
+        sheet.cell(row=next_row, column=2, value=value).font = Font(color='0F172A')
+        next_row += 1
+    if details:
+        next_row += 1
+
+    header_row = next_row
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=header_row, column=column, value=header)
+        cell.font = Font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor='0F766E')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    sheet.row_dimensions[header_row].height = 28
+
+    thin = Side(style='thin', color='D9E2F3')
+    for row_index, row_values in enumerate(rows, start=header_row + 1):
+        for column, value in enumerate(row_values, start=1):
+            cell = sheet.cell(row=row_index, column=column, value=value)
+            cell.border = Border(bottom=thin)
+            is_amount = isinstance(value, Decimal)
+            cell.alignment = Alignment(
+                horizontal='right' if is_amount else ('center' if column == 1 else 'left'),
+                vertical='center',
+                wrap_text=True,
+            )
+            if is_amount:
+                cell.number_format = '#,##0'
+        sheet.row_dimensions[row_index].height = 21
+
+    for column in range(1, column_count + 1):
+        values = [str(headers[column - 1])] + [
+            '' if len(row) < column or row[column - 1] is None else str(row[column - 1])
+            for row in rows
+        ]
+        width = min(max(max((len(value) for value in values), default=10) + 2, 10), 28)
+        sheet.column_dimensions[get_column_letter(column)].width = width
+
+    last_row = max(header_row + len(rows), header_row)
+    sheet.auto_filter.ref = f'A{header_row}:{last_column}{last_row}'
+    sheet.freeze_panes = f'A{header_row + 1}'
+    sheet.print_area = f'A1:{last_column}{last_row}'
+    sheet.print_title_rows = f'1:{header_row}'
+    sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+    sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 1
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4, header=0.15, footer=0.15)
+    sheet.print_options.horizontalCentered = True
+
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f"attachment; filename*=UTF-8''{filename}"
+    return response
+
+
+def student_list_export(request):
+    search_name = request.GET.get('name', '').strip()
+    classroom_id = request.GET.get('classroom_id', '').strip()
+    students = Student.objects.all().select_related('classroom').prefetch_related('payments__payment_period')
+    if search_name:
+        students = students.filter(name__icontains=search_name)
+    if classroom_id:
+        students = students.filter(classroom_id=classroom_id)
+    students = list(students.order_by('classroom__name', 'name'))
+    attach_payment_period_amounts(students)
+    rows = []
+    for index, student in enumerate(students, start=1):
+        rows.append([
+            index, student.name, student.phone or '', student.classroom.name if student.classroom else '',
+            student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
+            *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+        ])
+    return formatted_excel_response(
+        'DANH SÁCH HỌC SINH',
+        ['STT', 'Học sinh', 'SĐT', 'Lớp', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
+        rows,
+        'danh_sach_hoc_sinh.xlsx',
+    )
+
+
+def classroom_list_export(request):
+    rows = []
+    for index, classroom in enumerate(ClassRoom.objects.all().prefetch_related('teachers').order_by('name'), start=1):
+        rows.append([
+            index,
+            classroom.name,
+            ', '.join(teacher.name for teacher in classroom.teachers.all()),
+            classroom.students.count(),
+            Enrollment.objects.filter(student__classroom=classroom).values('subject').distinct().count(),
+            Payment.objects.filter(classroom=classroom).aggregate(total=Sum('amount'))['total'] or 0,
+        ])
+    return formatted_excel_response(
+        'DANH SÁCH LỚP HỌC',
+        ['STT', 'Lớp học', 'Giảng viên', 'Sĩ số', 'Số môn', 'Tổng học phí đã thu'],
+        rows,
+        'danh_sach_lop_hoc.xlsx',
+    )
+
+
+def classroom_export(request, pk):
+    classroom = get_object_or_404(ClassRoom, pk=pk)
+    teacher_id = request.GET.get('teacher')
+    teacher = get_object_or_404(Teacher, pk=teacher_id, classes=classroom) if teacher_id else None
+    students = Student.objects.filter(classroom=classroom).prefetch_related('payments__payment_period')
+    if teacher:
+        student_ids = Enrollment.objects.filter(
+            student__classroom=classroom, teacher=teacher
+        ).values_list('student_id', flat=True)
+        students = students.filter(id__in=student_ids)
+    students = list(students.order_by('name'))
+    attach_payment_period_amounts(students, teacher=teacher)
+    subject_by_student = {}
+    enrollments = Enrollment.objects.filter(student__in=students)
+    if teacher:
+        enrollments = enrollments.filter(teacher=teacher)
+    for enrollment in enrollments.select_related('subject'):
+        subject_by_student.setdefault(enrollment.student_id, []).append(enrollment.subject.name)
+    rows = []
+    for index, student in enumerate(students, start=1):
+        rows.append([
+            index, student.name, student.phone or '', ', '.join(subject_by_student.get(student.id, [])),
+            student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
+            *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+        ])
+    details = [('Lớp', classroom.name)]
+    if teacher:
+        details.append(('Giảng viên', teacher.name))
+    return formatted_excel_response(
+        f'DANH SÁCH HỌC SINH - {classroom.name}',
+        ['STT', 'Học sinh', 'SĐT', 'Môn học', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
+        rows,
+        f'danh_sach_lop_{classroom.id}.xlsx',
+        details,
+    )
+
+
+def student_export(request, pk):
+    student = get_object_or_404(Student, pk=pk)
+    payments = Payment.objects.filter(student=student).select_related('payment_period', 'subject', 'teacher').order_by('payment_period__name')
+    rows = [
+        [
+            index, payment.payment_period.name, payment.subject.name, payment.teacher.name,
+            payment.payment_date.strftime('%d/%m/%Y'), payment.amount,
+        ]
+        for index, payment in enumerate(payments, start=1)
+    ]
+    return formatted_excel_response(
+        f'BẢNG KÊ HỌC PHÍ - {student.name}',
+        ['STT', 'Đợt đóng tiền', 'Môn học', 'Giảng viên', 'Ngày đóng', 'Số tiền'],
+        rows,
+        f'bang_ke_hoc_phi_{student.id}.xlsx',
+        [('Học sinh', student.name), ('Lớp', student.classroom.name if student.classroom else '')],
+    )
+
 def student_create(request):
     next_url = request.GET.get('next') or request.POST.get('next', '')
     
@@ -832,10 +1015,12 @@ def _payment_period_number(period_name):
     return int(match.group(1)) if match else None
 
 
-def _create_batch_payments(items, payment_date):
+def _create_batch_payments(items, payment_date, payment_method='cash'):
     """Create individual payments and their one combined customer receipt."""
     if not isinstance(items, list) or not items:
         raise ValueError('Hãy thêm ít nhất một khoản thu.')
+    if payment_method not in dict(Payment.PAYMENT_METHOD_CHOICES):
+        raise ValueError('Hình thức thanh toán không hợp lệ.')
 
     seen_items = set()
     prepared_items = []
@@ -894,6 +1079,7 @@ def _create_batch_payments(items, payment_date):
                 payment_period=period,
                 amount=amount,
                 payment_date=payment_date,
+                payment_method=payment_method,
             )
             # Retain the legacy status for pages that still display it.  The
             # student list itself derives its status from Payment records.
@@ -914,7 +1100,11 @@ def payment_create(request):
                 payment_date = datetime.datetime.strptime(
                     request.POST.get('payment_date', ''), '%Y-%m-%d'
                 ).date()
-                batch = _create_batch_payments(items, payment_date)
+                batch = _create_batch_payments(
+                    items,
+                    payment_date,
+                    request.POST.get('payment_method', 'cash'),
+                )
             except DatabaseError:
                 error = 'Cơ sở dữ liệu chưa được cập nhật cho tính năng thu học phí. Hãy chạy lệnh migrate rồi thử lại.'
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1244,7 +1434,11 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 def payment_receipt(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
     import os
-    if not payment.receipt_pdf or not os.path.exists(payment.receipt_pdf.path):
+    if (
+        not payment.receipt_pdf
+        or not os.path.exists(payment.receipt_pdf.path)
+        or not payment.receipt_pdf.name.endswith('_a5_v2.pdf')
+    ):
         payment.generate_receipt_pdf()
         payment.refresh_from_db()
         
@@ -1257,7 +1451,11 @@ def payment_receipt(request, pk):
 def payment_batch_receipt(request, pk):
     batch = get_object_or_404(PaymentBatch, pk=pk)
     import os
-    if not batch.receipt_pdf or not os.path.exists(batch.receipt_pdf.path):
+    if (
+        not batch.receipt_pdf
+        or not os.path.exists(batch.receipt_pdf.path)
+        or not batch.receipt_pdf.name.endswith('_a5_v2.pdf')
+    ):
         batch.generate_receipt_pdf()
         batch.refresh_from_db()
 
@@ -1601,7 +1799,8 @@ def teacher_settlement_export(request, pk):
     )
     # openpyxl is already a project dependency and is used for the existing Excel import flow.
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.worksheet.page import PageMargins
 
     rows = _settlement_student_rows(settlement.payments.select_related(
         'student', 'payment_period'
@@ -1610,24 +1809,42 @@ def teacher_settlement_export(request, pk):
     sheet = workbook.active
     sheet.title = 'Quyet toan'
     sheet.sheet_view.showGridLines = False
+    sheet.freeze_panes = 'A6'
     sheet.merge_cells('A1:E1')
     sheet['A1'] = f'QUYẾT TOÁN GIẢNG VIÊN - {settlement.teacher.name}'
     sheet['A1'].font = Font(bold=True, size=14, color='FFFFFF')
     sheet['A1'].fill = PatternFill('solid', fgColor='1D4ED8')
     sheet['A1'].alignment = Alignment(horizontal='center')
+    sheet.row_dimensions[1].height = 28
     sheet.append(['Lớp', settlement.classroom.name])
     sheet.append(['Ngày quyết toán', timezone.localtime(settlement.settled_at).strftime('%d/%m/%Y %H:%M')])
     sheet.append([])
+    for row_number in (2, 3):
+        sheet.cell(row=row_number, column=1).font = Font(bold=True, color='334155')
+        sheet.cell(row=row_number, column=2).font = Font(color='0F172A')
     header_row = 5
     headers = ['STT', 'Học sinh', 'SĐT', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
     sheet.append(headers)
     for cell in sheet[header_row]:
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', fgColor='0F766E')
-        cell.alignment = Alignment(horizontal='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    sheet.row_dimensions[header_row].height = 26
+    thin_border = Side(style='thin', color='D9E2F3')
+    table_border = Border(bottom=thin_border)
     for index, row in enumerate(rows, start=1):
         sheet.append([index, row['student_name'], row['phone'], ', '.join(row['period_names']), int(row['amount'])])
-        sheet.cell(row=header_row + index, column=5).number_format = '#,##0'
+        row_number = header_row + index
+        sheet.row_dimensions[row_number].height = 21
+        for column in range(1, 6):
+            cell = sheet.cell(row=row_number, column=column)
+            cell.border = table_border
+            cell.alignment = Alignment(
+                horizontal='right' if column == 5 else ('center' if column == 1 else 'left'),
+                vertical='center',
+                wrap_text=column == 4,
+            )
+        sheet.cell(row=row_number, column=5).number_format = '#,##0'
     total_row = header_row + len(rows) + 1
     sheet.cell(row=total_row, column=4, value='Tổng doanh thu')
     sheet.cell(row=total_row, column=5, value=int(settlement.revenue))
@@ -1637,11 +1854,29 @@ def teacher_settlement_export(request, pk):
     sheet.cell(row=total_row + 2, column=4, value='Tổng tiền giảng viên nhận')
     sheet.cell(row=total_row + 2, column=5, value=int(settlement.teacher_amount))
     for row_number in range(total_row, total_row + 3):
-        sheet.cell(row=row_number, column=4).font = Font(bold=True)
-        sheet.cell(row=row_number, column=5).font = Font(bold=True)
-        sheet.cell(row=row_number, column=5).number_format = '#,##0' if row_number != total_row + 1 else '0%'
+        label_cell = sheet.cell(row=row_number, column=4)
+        value_cell = sheet.cell(row=row_number, column=5)
+        label_cell.font = Font(bold=True, color='0F172A')
+        value_cell.font = Font(bold=True, color='0F172A')
+        label_cell.fill = PatternFill('solid', fgColor='E2E8F0')
+        value_cell.fill = PatternFill('solid', fgColor='E2E8F0')
+        label_cell.alignment = Alignment(horizontal='right', vertical='center')
+        value_cell.alignment = Alignment(horizontal='right', vertical='center')
+        value_cell.number_format = '#,##0' if row_number != total_row + 1 else '0%'
+    sheet.cell(row=total_row + 2, column=4).fill = PatternFill('solid', fgColor='DCFCE7')
+    sheet.cell(row=total_row + 2, column=5).fill = PatternFill('solid', fgColor='DCFCE7')
     for column, width in {'A': 8, 'B': 28, 'C': 18, 'D': 32, 'E': 24}.items():
         sheet.column_dimensions[column].width = width
+    sheet.auto_filter.ref = f'A{header_row}:E{header_row + len(rows)}'
+    sheet.print_area = f'A1:E{total_row + 2}'
+    sheet.print_title_rows = f'1:{header_row}'
+    sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
+    sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
+    sheet.page_setup.fitToWidth = 1
+    sheet.page_setup.fitToHeight = 1
+    sheet.sheet_properties.pageSetUpPr.fitToPage = True
+    sheet.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4, header=0.15, footer=0.15)
+    sheet.print_options.horizontalCentered = True
 
     buffer = io.BytesIO()
     workbook.save(buffer)

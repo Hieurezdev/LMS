@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
 {% block title %}Quyết toán {{ teacher.name }} - {{ classroom.name }}{% endblock title %}
 
@@ -39,21 +40,21 @@
     <div class="col-12 col-md-4">
       <div class="stat-card h-100" style="border-left:4px solid #16A34A;">
         <div class="stat-label">Doanh thu chờ quyết toán</div>
-        <div class="stat-value text-success mt-1">{{ revenue|floatformat:0 }}</div>
+        <div class="stat-value text-success mt-1">{{ revenue|floatformat:0|intcomma }}</div>
         <div class="small text-secondary mt-1">{{ payment_count }} lượt đóng · VNĐ</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
       <div class="stat-card h-100" style="border-left:4px solid #2563EB;">
         <div class="stat-label">Giảng viên thực nhận ({{ teacher_share_rate|floatformat:0 }}%)</div>
-        <div class="stat-value text-primary mt-1">{{ teacher_amount|floatformat:0 }}</div>
+        <div class="stat-value text-primary mt-1">{{ teacher_amount|floatformat:0|intcomma }}</div>
         <div class="small text-secondary mt-1">VNĐ</div>
       </div>
     </div>
     <div class="col-12 col-md-4">
       <div class="stat-card h-100" style="border-left:4px solid #D97706;">
         <div class="stat-label">Số tiền cần quyết toán</div>
-        <div class="stat-value" style="color:#D97706;">{{ teacher_amount|floatformat:0 }}</div>
+        <div class="stat-value" style="color:#D97706;">{{ teacher_amount|floatformat:0|intcomma }}</div>
         <div class="small text-secondary mt-1">Sau khi chốt, khoản này sẽ được trừ khỏi số chờ quyết toán.</div>
       </div>
     </div>
@@ -66,10 +67,10 @@
         <div class="small text-secondary">Tổng hợp theo từng học sinh trong các đợt đã chọn.</div>
       </div>
       {% if payment_count %}
-      <form method="post">
+      <form method="post" id="settlement-confirm-form">
         {% csrf_token %}
         {% for period_number in selected_period_numbers %}<input type="hidden" name="period" value="{{ period_number }}">{% endfor %}
-        <button type="submit" class="btn btn-success">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#settlement-confirm-modal">
           <i class="fas fa-check-circle me-1"></i> Xác nhận quyết toán &amp; tải Excel
         </button>
       </form>
@@ -93,16 +94,12 @@
           {% for row in student_rows %}
           <tr>
             <td class="text-center">{{ forloop.counter }}</td>
-            <td class="fw-semibold">
-              <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#EEF1FE;color:#4F6EF7;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">
-                {{ row.student_name|first|upper }}
-              </span>{{ row.student_name }}
-            </td>
+            <td class="fw-semibold">{{ row.student_name }}</td>
             <td>{{ row.phone|default:'-' }}</td>
             {% for state in row.period_states %}
             <td class="text-center">
               {% if state.status == 'unsettled' %}
-              <span class="badge bg-success text-white" style="font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-check-circle me-1"></i>{{ state.amount|floatformat:0 }} VNĐ</span>
+              <span class="badge bg-success text-white" style="font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-check-circle me-1"></i>{{ state.amount|floatformat:0|intcomma }} VNĐ</span>
               {% elif state.status == 'settled' %}
               <span class="badge" style="background:#EDE9FE;color:#6D28D9;border:1px solid #C4B5FD;font-size:11px;padding:4px 8px;white-space:nowrap;"><i class="fas fa-hand-holding-usd me-1"></i>Đã quyết toán</span>
               {% else %}
@@ -110,7 +107,7 @@
               {% endif %}
             </td>
             {% endfor %}
-            <td class="text-end fw-bold text-success">{{ row.amount|floatformat:0 }} VNĐ</td>
+            <td class="text-end fw-bold text-success">{{ row.amount|floatformat:0|intcomma }} VNĐ</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -122,6 +119,29 @@
       <p class="mb-0">Không có khoản thu chưa quyết toán trong các đợt đã chọn.</p>
     </div>
     {% endif %}
+  </div>
+
+  <div class="modal fade" id="settlement-confirm-modal" tabindex="-1" aria-labelledby="settlement-confirm-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold" id="settlement-confirm-title">
+            <i class="fas fa-hand-holding-usd text-success me-2"></i>Xác nhận quyết toán
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+        </div>
+        <div class="modal-body pt-3">
+          Bạn có muốn lưu quyết toán và xuất file Excel không?
+          <div class="small text-secondary mt-2">Các khoản đã chốt sẽ không còn nằm trong danh sách chờ quyết toán.</div>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" form="settlement-confirm-form" class="btn btn-success">
+            <i class="fas fa-check-circle me-1"></i>Lưu và xuất Excel
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
   {% endif %}
 </div>

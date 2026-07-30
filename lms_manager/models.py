@@ -192,6 +192,11 @@ class PaymentPeriod(models.Model):
 
 
 class Payment(models.Model):
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Tiền mặt'),
+        ('bank_transfer', 'Chuyển khoản'),
+    ]
+
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="payments", verbose_name="Học sinh")
     classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="payments", verbose_name="Lớp")
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name="payments", verbose_name="Môn học")
@@ -199,6 +204,12 @@ class Payment(models.Model):
     payment_period = models.ForeignKey(PaymentPeriod, on_delete=models.CASCADE, related_name="payments", verbose_name="Đợt đóng tiền")
     amount = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Số tiền đóng")
     payment_date = models.DateField(default=timezone.now, verbose_name="Ngày đóng")
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default='cash',
+        verbose_name="Hình thức thanh toán",
+    )
     receipt_pdf = models.FileField(upload_to="receipts/", blank=True, null=True, verbose_name="Biên lai PDF")
 
     class Meta:
@@ -218,7 +229,9 @@ class Payment(models.Model):
         pisa_status = pisa.CreatePDF(html_string, dest=pdf_io, link_callback=link_callback)
         if not pisa_status.err:
             pdf_io.seek(0)
-            filename = f"receipt_{self.id}.pdf"
+            if self.receipt_pdf:
+                self.receipt_pdf.storage.delete(self.receipt_pdf.name)
+            filename = f"receipt_{self.id}_a5_v2.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             Payment.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 
@@ -244,20 +257,23 @@ class PaymentBatch(models.Model):
         return f"Phiếu thu tổng hợp #{self.pk}"
 
     def generate_receipt_pdf(self):
-        payments = self.payments.select_related(
+        payments = list(self.payments.select_related(
             'student', 'classroom', 'subject', 'teacher', 'payment_period'
-        ).order_by('student__name', 'id')
+        ).order_by('student__name', 'id'))
         context = {
             'batch': self,
             'payments': payments,
             'total_amount': sum(payment.amount for payment in payments),
+            'payment_method_display': payments[0].get_payment_method_display() if payments else 'Tiền mặt',
         }
         html_string = render_to_string('lms_manager/batch_receipt_pdf.html', context)
         pdf_io = BytesIO()
         pisa_status = pisa.CreatePDF(html_string, dest=pdf_io, link_callback=link_callback)
         if not pisa_status.err:
             pdf_io.seek(0)
-            filename = f"batch_receipt_{self.id}.pdf"
+            if self.receipt_pdf:
+                self.receipt_pdf.storage.delete(self.receipt_pdf.name)
+            filename = f"batch_receipt_{self.id}_a5_v2.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 
