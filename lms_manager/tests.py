@@ -75,6 +75,29 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(by_phone, other_teacher.name)
         self.assertNotContains(by_phone, self.teacher.name)
 
+    def test_teacher_with_settlement_cannot_be_deleted(self):
+        settlement = TeacherSettlement.objects.create(
+            teacher=self.teacher,
+            classroom=self.classroom,
+            revenue=100000,
+            teacher_amount=80000,
+        )
+        settlement.payments.add(self.payment)
+
+        response = self.client.post(reverse('teacher_delete', args=[self.teacher.id]), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Teacher.objects.filter(pk=self.teacher.id).exists())
+        self.assertContains(response, 'Không thể xóa giảng viên')
+
+    def test_teacher_without_settlement_can_be_deleted(self):
+        teacher = Teacher.objects.create(name='Temporary teacher')
+
+        response = self.client.post(reverse('teacher_delete', args=[teacher.id]))
+
+        self.assertRedirects(response, reverse('teacher_list'))
+        self.assertFalse(Teacher.objects.filter(pk=teacher.id).exists())
+
     def test_student_and_classroom_exports_are_formatted_xlsx_for_a4_printing(self):
         export_specs = [
             ('student_list_export', []),

@@ -533,8 +533,17 @@ def teacher_update(request, pk):
     })
 
 
+@require_POST
 def teacher_delete(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
+    if TeacherSettlement.objects.filter(teacher=teacher).exists():
+        messages.error(
+            request,
+            f"Không thể xóa giảng viên '{teacher.name}' vì đã có dữ liệu quyết toán. "
+            "Hãy giữ giảng viên này để bảo toàn lịch sử tài chính.",
+        )
+        return redirect('teacher_list')
+
     teacher.delete()
     messages.success(request, "Đã xóa giảng viên!")
     return redirect('teacher_list')
