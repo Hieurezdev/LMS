@@ -5,8 +5,41 @@
 
 {% block header %}
 <style>
-    .classroom-list-scroll { max-height: 65vh; min-height: 260px; overflow: auto; scrollbar-gutter: stable; }
+    .classroom-list-scroll {
+        max-height: 65vh;
+        min-height: 260px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-gutter: stable;
+    }
     .classroom-list-scroll thead th { position: sticky; top: 0; z-index: 2; background: #F8FAFC; }
+    .classroom-list-table { width: 100%; min-width: 0 !important; table-layout: fixed; font-size: 12px !important; }
+    .classroom-list-table th, .classroom-list-table td { padding: 9px 7px !important; white-space: normal !important; overflow-wrap: anywhere; }
+    .classroom-list-table th { font-size: 10px !important; letter-spacing: .2px; }
+    .classroom-list-table .classroom-id { width: 6%; }
+    .classroom-list-table .classroom-name { width: 14%; }
+    .classroom-list-table .classroom-teacher { width: 24%; }
+    .classroom-list-table .classroom-count { width: 10%; }
+    .classroom-list-table .classroom-subjects { width: 8%; }
+    .classroom-list-table .classroom-revenue { width: 24%; }
+    .classroom-list-table .classroom-actions { width: 14%; }
+    .classroom-list-table .fa-school { display: none; }
+    .classroom-list-table .btn-xs { min-width: 28px; padding-left: 6px !important; padding-right: 6px !important; }
+
+    @media (max-width: 575.98px) {
+        .classroom-list-scroll { max-height: 58vh; }
+        .classroom-list-table { font-size: 10px !important; }
+        .classroom-list-table th, .classroom-list-table td { padding: 7px 3px !important; }
+        .classroom-list-table th { font-size: 8px !important; }
+        .classroom-list-table .classroom-id { width: 5%; }
+        .classroom-list-table .classroom-name { width: 15%; }
+        .classroom-list-table .classroom-teacher { width: 23%; }
+        .classroom-list-table .classroom-count { width: 11%; }
+        .classroom-list-table .classroom-subjects { width: 9%; }
+        .classroom-list-table .classroom-revenue { width: 24%; }
+        .classroom-list-table .classroom-actions { width: 13%; }
+        .classroom-list-table .btn-xs { min-width: 24px; font-size: 9px; }
+    }
 </style>
 {% endblock header %}
 
@@ -43,16 +76,16 @@
     </div>
     
     <div class="table-responsive classroom-list-scroll">
-        <table class="lms-table table table-hover align-middle mb-0" id="classroom-excel-table" style="font-size:13.5px; min-width:950px;">
+        <table class="lms-table table table-hover align-middle mb-0 classroom-list-table" id="classroom-excel-table">
             <thead class="table-light">
                 <tr>
-                    <th class="text-center" style="width:80px;">Mã lớp</th>
-                    <th style="min-width:180px;">Tên lớp học</th>
-                    <th style="min-width:180px;">Giảng viên dạy</th>
-                    <th class="text-center" style="width:130px;">Sĩ số</th>
-                    <th class="text-center" style="width:110px;">Số môn</th>
-                    <th class="text-end" style="min-width:180px;">Tổng học phí đã thu</th>
-                    <th class="text-center no-export" style="width:110px;">Hành động</th>
+                    <th class="text-center classroom-id">Mã lớp</th>
+                    <th class="classroom-name">Tên lớp</th>
+                    <th class="classroom-teacher">Giảng viên</th>
+                    <th class="text-center classroom-count">Sĩ số</th>
+                    <th class="text-center classroom-subjects">Môn</th>
+                    <th class="text-end classroom-revenue">Học phí đã thu</th>
+                    <th class="text-center no-export classroom-actions">Thao tác</th>
                 </tr>
             </thead>
             <tbody>

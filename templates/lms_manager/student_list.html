@@ -17,6 +17,23 @@
     z-index: 2;
     background: #F8FAFC;
   }
+  /* Use the same airy desktop list proportions as the teacher detail page. */
+  @media (min-width: 769px) {
+    .student-overview-table { font-size: 11px !important; }
+    .student-overview-table th { padding: 8px 5px !important; font-size: 9.5px; }
+    .student-overview-table td { padding: 8px 5px !important; }
+    .student-overview-table th:nth-child(1) { width: 40px !important; }
+    .student-overview-table th:nth-child(2) { width: 120px !important; }
+    .student-overview-table th:nth-child(3),
+    .student-overview-table th:nth-child(4) { width: 76px !important; }
+    .student-overview-table th:nth-child(5) { width: 70px !important; }
+    .student-overview-table th:nth-child(n+6):nth-child(-n+13) { width: 68px !important; }
+    .student-overview-table th:nth-child(14) { width: 88px !important; }
+    .student-overview-table .badge { font-size: 10px; padding: 3px 5px; }
+    .student-overview-table .payment-currency,
+    .student-overview-table .payment-status-text { display: none; }
+    .student-overview-table td:nth-child(n+6):nth-child(-n+13) .badge .fas { margin-right: 0 !important; }
+  }
 </style>
 {% endblock header %}
 
@@ -96,7 +113,7 @@
     </div>
 
     <div class="table-responsive student-list-scroll">
-      <table class="lms-table table table-hover align-middle mb-0" id="student-excel-table" style="font-size: 13.5px;">
+      <table class="lms-table teacher-student-table student-overview-table table table-hover align-middle mb-0" id="student-excel-table" style="font-size: 13px;">
         <thead class="table-light text-center">
           <tr>
             <th style="width: 50px;">STT</th>

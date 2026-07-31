@@ -86,6 +86,7 @@
         border-color: #198754 !important;
         box-shadow: 0 4px 10px rgba(25, 135, 84, 0.2);
     }
+
 </style>
 {% endblock header %}
 
@@ -167,7 +168,7 @@
                     <p class="mb-0 small">Giảng viên này chưa có học sinh nào đăng ký học trong lớp này.</p>
                 </div>
                 {% else %}
-                <table class="lms-table table table-hover align-middle mb-0" id="table-teacher-{{ report.teacher.id }}" style="font-size: 13.5px;">
+                <table class="lms-table teacher-student-table table table-hover align-middle mb-0" id="table-teacher-{{ report.teacher.id }}" style="font-size: 13px;">
                     <thead class="table-light text-center">
                         <tr>
                             <th style="width: 50px;">STT</th>
