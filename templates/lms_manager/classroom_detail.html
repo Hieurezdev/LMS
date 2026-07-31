@@ -153,7 +153,7 @@
                         <option value="unpaid-{{ period_num }}">Đợt {{ period_num }}: chưa đóng</option>
                         {% endfor %}
                     </select>
-                    <a href="{% url 'classroom_export' classroom.id %}?teacher={{ report.teacher.id }}" class="btn btn-outline-success btn-sm rounded-3">
+                    <a id="classroom-export-{{ report.teacher.id }}" href="{% url 'classroom_export' classroom.id %}?teacher={{ report.teacher.id }}" class="btn btn-outline-success btn-sm rounded-3">
                         <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
                     </a>
                     {% endif %}
@@ -334,6 +334,7 @@
         document.querySelectorAll('.classroom-payment-filter').forEach(filter => {
             filter.addEventListener('change', function() {
                 const table = document.getElementById(`table-teacher-${this.dataset.teacherId}`);
+                const exportLink = document.getElementById(`classroom-export-${this.dataset.teacherId}`);
                 if (!table) return;
                 const [status, period] = this.value.split('-');
                 table.querySelectorAll('.classroom-student-row').forEach(row => {
@@ -341,6 +342,15 @@
                     row.style.display = status === 'all' || (status === 'paid' && isPaid) ||
                         (status === 'unpaid' && !isPaid) ? '' : 'none';
                 });
+                if (exportLink) {
+                    const exportUrl = new URL(exportLink.href, window.location.origin);
+                    if (this.value === 'all') {
+                        exportUrl.searchParams.delete('payment_filter');
+                    } else {
+                        exportUrl.searchParams.set('payment_filter', this.value);
+                    }
+                    exportLink.href = exportUrl.pathname + exportUrl.search;
+                }
             });
         });
 

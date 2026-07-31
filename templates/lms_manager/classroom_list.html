@@ -5,47 +5,8 @@
 
 {% block header %}
 <style>
-    /* Excel Grid Style */
-    .excel-container {
-        font-size: 13.5px;
-        background-color: #ffffff;
-        border: 1px solid #d0d0d0;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-    .excel-table-header {
-        background-color: #f3f3f3;
-        border-bottom: 2px solid #c0c0c0;
-        padding: 10px 15px;
-        font-weight: 600;
-        color: #333;
-    }
-    .excel-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 0;
-    }
-    .excel-table th {
-        background-color: #e9e9e9;
-        color: #333333;
-        font-weight: 500;
-        border: 1px solid #d0d0d0;
-        padding: 8px 12px;
-        text-align: left;
-        font-size: 13px;
-        user-select: none;
-    }
-    .excel-table td {
-        border: 1px solid #e0e0e0;
-        padding: 8px 12px;
-        color: #2b2b2b;
-    }
-    .excel-table tr:nth-child(even) {
-        background-color: #fdfdfd;
-    }
-    .excel-table tr:hover {
-        background-color: #f2f7fa;
-    }
+    .classroom-list-scroll { max-height: 65vh; min-height: 260px; overflow: auto; scrollbar-gutter: stable; }
+    .classroom-list-scroll thead th { position: sticky; top: 0; z-index: 2; background: #F8FAFC; }
 </style>
 {% endblock header %}
 
@@ -73,47 +34,44 @@
     {% endfor %}
 {% endif %}
 
-<div class="excel-container shadow-sm mb-4">
-    <div class="excel-table-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-            <i class="fas fa-school me-2 text-success"></i>
-            <span class="text-uppercase fw-bold text-dark">BẢNG DANH SÁCH LỚP HỌC</span>
-        </div>
+<div class="table-card mb-5">
+    <div class="table-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="table-card-title"><i class="fas fa-school"></i>Danh sách lớp học</div>
         <a href="{% url 'classroom_list_export' %}" class="btn btn-sm btn-outline-success rounded-3">
             <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
         </a>
     </div>
     
-    <div class="table-responsive">
-        <table class="excel-table" id="classroom-excel-table">
-            <thead>
+    <div class="table-responsive classroom-list-scroll">
+        <table class="lms-table table table-hover align-middle mb-0" id="classroom-excel-table" style="font-size:13.5px; min-width:950px;">
+            <thead class="table-light">
                 <tr>
-                    <th style="width: 10%;">Mã Lớp (ID)</th>
-                    <th style="width: 25%;">Tên Lớp học</th>
-                    <th style="width: 20%;">Giảng viên dạy</th>
-                    <th style="width: 15%; text-align: center;">Sĩ số học sinh</th>
-                    <th style="width: 10%; text-align: center;">Số môn học</th>
-                    <th style="width: 15%; text-align: right;">Tổng học phí đã thu</th>
-                    <th style="width: 10%; text-align: right;" class="no-export">Hành động</th>
+                    <th class="text-center" style="width:80px;">Mã lớp</th>
+                    <th style="min-width:180px;">Tên lớp học</th>
+                    <th style="min-width:180px;">Giảng viên dạy</th>
+                    <th class="text-center" style="width:130px;">Sĩ số</th>
+                    <th class="text-center" style="width:110px;">Số môn</th>
+                    <th class="text-end" style="min-width:180px;">Tổng học phí đã thu</th>
+                    <th class="text-center no-export" style="width:110px;">Hành động</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in class_reports %}
                     <tr>
-                        <td>{{ item.classroom.id }}</td>
+                        <td class="text-center text-secondary fw-semibold">{{ item.classroom.id }}</td>
                         <td class="fw-semibold text-dark">
                             <a href="{% url 'classroom_detail' item.classroom.id %}" class="text-decoration-none text-primary">
                                 <i class="fas fa-school me-2 text-secondary"></i>{{ item.classroom.name }}
                             </a>
                         </td>
                         <td class="text-secondary fw-semibold">{{ item.teachers_names|default:"-" }}</td>
-                        <td style="text-align: center;">{{ item.student_count }} học sinh</td>
-                        <td style="text-align: center;">{{ item.subject_count }} môn</td>
-                        <td style="text-align: right;" class="fw-bold text-success">
+                        <td class="text-center">{{ item.student_count }} học sinh</td>
+                        <td class="text-center">{{ item.subject_count }} môn</td>
+                        <td class="text-end fw-bold text-success">
                             {{ item.revenue|floatformat:0|intcomma }} VNĐ
                         </td>
-                        <td style="text-align: right;" class="no-export">
-                            <div class="d-flex justify-content-end gap-1">
+                        <td class="text-center no-export">
+                            <div class="d-flex justify-content-center gap-1">
                                 <a href="{% url 'classroom_edit' item.classroom.id %}" class="btn btn-xs btn-outline-primary rounded-3 py-0.5 px-2" title="Sửa">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -125,7 +83,7 @@
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">Chưa có lớp học nào được đăng ký</td>
+                        <td colspan="7" class="text-center text-muted py-4">Chưa có lớp học nào được đăng ký</td>
                     </tr>
                 {% endfor %}
             </tbody>

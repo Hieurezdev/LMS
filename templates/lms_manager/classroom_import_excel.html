@@ -30,13 +30,13 @@
                         <ul>
                             <li>**Tên**: Họ và tên học sinh (bắt buộc)</li>
                             <li>**SĐT**: Số điện thoại liên hệ (bắt buộc)</li>
-                            <li>**Lớp**: Tên lớp học, ví dụ: `{{ classroom.name }}` (bắt buộc)</li>
+                            <li>**Lớp**: Cột này không bắt buộc. Nếu có trong file, hệ thống vẫn bỏ qua và tự gán tất cả học sinh vào lớp <strong>{{ classroom.name }}</strong>.</li>
                             <li>**Ngày nhập học**: Ngày bắt đầu học của học sinh (tùy chọn, có thể ghi là *Ngày bắt đầu*, định dạng ngày tháng như `15/07/2026` hoặc `2026-07-15`)</li>
                             <li>**STT** (Số thứ tự): Cột này **không bắt buộc**. Sau khi nhập vào, hệ thống sẽ tự động hiển thị số thứ tự (STT) của học sinh.</li>
                         </ul>
                     </li>
                     <li class="mb-2">Hệ thống sẽ **tự động khởi tạo 8 đợt đóng học phí mặc định** (tất cả đều là *Chưa đóng*) cho từng học sinh.</li>
-                    <li class="mb-2">Tên học sinh và tên lớp học sẽ được hệ thống chuẩn hóa viết hoa chữ cái đầu tự động.</li>
+                    <li class="mb-2">Tên học sinh sẽ được hệ thống chuẩn hóa viết hoa chữ cái đầu tự động.</li>
                 </ol>
                 <div class="table-responsive">
                     <table class="table table-bordered table-sm small mb-0 bg-white text-center">

@@ -231,7 +231,7 @@ class Payment(models.Model):
             pdf_io.seek(0)
             if self.receipt_pdf:
                 self.receipt_pdf.storage.delete(self.receipt_pdf.name)
-            filename = f"receipt_{self.id}_a5_v2.pdf"
+            filename = f"receipt_{self.id}_a5_v4.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             Payment.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 
@@ -246,15 +246,15 @@ class PaymentBatch(models.Model):
     payment_date = models.DateField(default=timezone.now, verbose_name="Ngày thu")
     created_at = models.DateTimeField(auto_now_add=True)
     receipt_pdf = models.FileField(upload_to="receipts/batches/", blank=True, null=True,
-                                   verbose_name="Biên lai tổng hợp PDF")
+                                   verbose_name="Biên lai  PDF")
 
     class Meta:
-        verbose_name = "Phiếu thu tổng hợp"
-        verbose_name_plural = "Phiếu thu tổng hợp"
+        verbose_name = "Phiếu thu "
+        verbose_name_plural = "Phiếu thu "
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Phiếu thu tổng hợp #{self.pk}"
+        return f"Phiếu thu  #{self.pk}"
 
     def generate_receipt_pdf(self):
         payments = list(self.payments.select_related(
@@ -265,6 +265,7 @@ class PaymentBatch(models.Model):
             'payments': payments,
             'total_amount': sum(payment.amount for payment in payments),
             'payment_method_display': payments[0].get_payment_method_display() if payments else 'Tiền mặt',
+            'receipt_is_short': len(payments) <= 2,
         }
         html_string = render_to_string('lms_manager/batch_receipt_pdf.html', context)
         pdf_io = BytesIO()
@@ -273,7 +274,7 @@ class PaymentBatch(models.Model):
             pdf_io.seek(0)
             if self.receipt_pdf:
                 self.receipt_pdf.storage.delete(self.receipt_pdf.name)
-            filename = f"batch_receipt_{self.id}_a5_v2.pdf"
+            filename = f"batch_receipt_{self.id}_a5_v17.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 

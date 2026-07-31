@@ -22,6 +22,9 @@
             margin: 40px auto;
             border: 1px solid #e9ecef;
         }
+        .receipt-signatures {
+            justify-content: space-between;
+        }
         .receipt-header {
             border-bottom: 2px dashed #dee2e6;
             padding-bottom: 20px;
@@ -109,6 +112,10 @@
                         <td>{{ payment.payment_period }}</td>
                     </tr>
                     <tr>
+                        <th>Hình thức thu</th>
+                        <td>{{ payment.get_payment_method_display }}</td>
+                    </tr>
+                    <tr>
                         <th>Ngày thanh toán</th>
                         <td>{{ payment.payment_date|date:"d/m/Y" }}</td>
                     </tr>
@@ -123,12 +130,12 @@
         </div>
 
         <!-- Signatures -->
-        <div class="row text-center mt-5">
-            <div class="col-6">
+        <div class="row receipt-signatures mt-5">
+            <div class="col-auto text-start">
                 <p class="small text-secondary mb-5">Người nộp tiền</p>
                 <p class="fw-bold mt-4 text-muted">(Ký và ghi rõ họ tên)</p>
             </div>
-            <div class="col-6">
+            <div class="col-auto text-end">
                 <p class="small text-secondary mb-5">Người thu tiền</p>
                 <p class="fw-bold mt-4 text-muted">(Ký và ghi rõ họ tên)</p>
             </div>

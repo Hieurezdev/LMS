@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
 from django.http import JsonResponse, HttpResponse
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.db.models import Sum, Count, Q
 from django.db import transaction, DatabaseError
@@ -58,6 +59,13 @@ def dashboard_view(request):
 
     # Total Revenue
     total_revenue = Payment.objects.aggregate(total=Sum('amount'))['total'] or 0
+    today = timezone.localdate()
+    today_revenue = Payment.objects.filter(payment_date=today).aggregate(total=Sum('amount'))['total'] or 0
+    revenue_by_day = list(
+        Payment.objects.values('payment_date')
+        .annotate(total=Sum('amount'), payment_count=Count('id'))
+        .order_by('-payment_date')[:14]
+    )
 
     # Revenue by payment period
     revenue_by_period = list(Payment.objects.values('payment_period__name')
@@ -118,7 +126,6 @@ def dashboard_view(request):
         debt_total_count += unpaid.count()
 
     # Tính học sinh nợ từ 2 đợt trở lên
-    today = timezone.localdate()
     overdue_students = []
     all_students = Student.objects.all().select_related('classroom').prefetch_related('enrollments', 'enrollments__subject', 'enrollments__teacher')
     
@@ -148,7 +155,7 @@ def dashboard_view(request):
             })
             
     # Sắp xếp theo số đợt nợ (nhiều trước), rồi tên học sinh
-    overdue_students.sort(key=lambda x: (-x['overdue_count'], x['student'].name))
+    overdue_students.sort(key=lambda x: (x['student'].name.casefold(), -x['overdue_count']))
 
     context = {
         'student_count': student_count,
@@ -158,6 +165,9 @@ def dashboard_view(request):
         'period_count': period_count,
         'payment_count': payment_count,
         'total_revenue': total_revenue,
+        'today_revenue': today_revenue,
+        'today': today,
+        'revenue_by_day': revenue_by_day,
         'revenue_by_period': revenue_by_period,
         'revenue_by_class': revenue_by_class,
         'revenue_by_subject': revenue_by_subject,
@@ -177,7 +187,7 @@ def dashboard_view(request):
 # -------------------------------------------------------------
 def debt_dashboard(request):
     """
-    Tổng hợp tất cả các khoản học phí chưa đóng theo từng đợt/lớp/giảng viên.
+     tất cả các khoản học phí chưa đóng theo từng đợt/lớp/giảng viên.
     Có bộ lọc theo lớp, giảng viên, môn học.
     """
     classrooms = ClassRoom.objects.all().order_by('name')
@@ -536,16 +546,14 @@ def teacher_update(request, pk):
 @require_POST
 def teacher_delete(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
-    if TeacherSettlement.objects.filter(teacher=teacher).exists():
-        messages.error(
-            request,
-            f"Không thể xóa giảng viên '{teacher.name}' vì đã có dữ liệu quyết toán. "
-            "Hãy giữ giảng viên này để bảo toàn lịch sử tài chính.",
-        )
-        return redirect('teacher_list')
-
+    settlement_count = TeacherSettlement.objects.filter(teacher=teacher).count()
+    if settlement_count:
+        TeacherSettlement.objects.filter(teacher=teacher).delete()
     teacher.delete()
-    messages.success(request, "Đã xóa giảng viên!")
+    messages.success(
+        request,
+        f"Đã xóa giảng viên và {settlement_count} dữ liệu quyết toán liên quan.",
+    )
     return redirect('teacher_list')
 
 
@@ -684,9 +692,8 @@ def student_list(request):
     if classroom_id:
         students = students.filter(classroom_id=classroom_id)
         
-    students = students.order_by('classroom__name', 'name')
-
     attach_payment_period_amounts(students)
+    students = sort_students_for_lists(students)
     
     return render(request, 'lms_manager/student_list.html', {
         'students': students,
@@ -712,10 +719,24 @@ def attach_payment_period_amounts(students, teacher=None):
             setattr(student, f'payment_amount_{period_num}', amount or None)
 
 
+def sort_students_for_lists(students):
+    """Sort student rows A-Z, then by the number of paid periods (highest first)."""
+    return sorted(
+        students,
+        key=lambda student: (
+            student.name.casefold(),
+            -sum(
+                bool(getattr(student, f'payment_amount_{period_num}', None))
+                for period_num in range(1, 9)
+            ),
+        ),
+    )
+
+
 def formatted_excel_response(title, headers, rows, filename, details=None):
-    """Create a consistently formatted, single-page A4 XLSX download."""
+    """Create a plain, single-page A4 XLSX download."""
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.styles import Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.page import PageMargins
 
@@ -728,15 +749,17 @@ def formatted_excel_response(title, headers, rows, filename, details=None):
     sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=column_count)
     title_cell = sheet['A1']
     title_cell.value = title
-    title_cell.font = Font(bold=True, size=14, color='FFFFFF')
-    title_cell.fill = PatternFill('solid', fgColor='1D4ED8')
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     sheet.row_dimensions[1].height = 28
+    thin = Side(style='thin', color='B8C2CC')
+    grid_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    title_cell.border = grid_border
 
     next_row = 2
     for label, value in details or []:
-        sheet.cell(row=next_row, column=1, value=label).font = Font(bold=True, color='334155')
-        sheet.cell(row=next_row, column=2, value=value).font = Font(color='0F172A')
+        for column, cell_value in ((1, label), (2, value)):
+            cell = sheet.cell(row=next_row, column=column, value=cell_value)
+            cell.border = grid_border
         next_row += 1
     if details:
         next_row += 1
@@ -744,16 +767,14 @@ def formatted_excel_response(title, headers, rows, filename, details=None):
     header_row = next_row
     for column, header in enumerate(headers, start=1):
         cell = sheet.cell(row=header_row, column=column, value=header)
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = PatternFill('solid', fgColor='0F766E')
+        cell.border = grid_border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     sheet.row_dimensions[header_row].height = 28
 
-    thin = Side(style='thin', color='D9E2F3')
     for row_index, row_values in enumerate(rows, start=header_row + 1):
         for column, value in enumerate(row_values, start=1):
             cell = sheet.cell(row=row_index, column=column, value=value)
-            cell.border = Border(bottom=thin)
+            cell.border = grid_border
             is_amount = isinstance(value, Decimal)
             cell.alignment = Alignment(
                 horizontal='right' if is_amount else ('center' if column == 1 else 'left'),
@@ -803,8 +824,9 @@ def student_list_export(request):
         students = students.filter(name__icontains=search_name)
     if classroom_id:
         students = students.filter(classroom_id=classroom_id)
-    students = list(students.order_by('classroom__name', 'name'))
+    students = list(students.order_by('name'))
     attach_payment_period_amounts(students)
+    students = sort_students_for_lists(students)
     rows = []
     for index, student in enumerate(students, start=1):
         rows.append([
@@ -842,6 +864,7 @@ def classroom_list_export(request):
 def classroom_export(request, pk):
     classroom = get_object_or_404(ClassRoom, pk=pk)
     teacher_id = request.GET.get('teacher')
+    payment_filter = request.GET.get('payment_filter', '')
     teacher = get_object_or_404(Teacher, pk=teacher_id, classes=classroom) if teacher_id else None
     students = Student.objects.filter(classroom=classroom).prefetch_related('payments__payment_period')
     if teacher:
@@ -851,6 +874,15 @@ def classroom_export(request, pk):
         students = students.filter(id__in=student_ids)
     students = list(students.order_by('name'))
     attach_payment_period_amounts(students, teacher=teacher)
+    filter_match = re.fullmatch(r'(paid|unpaid)-([1-8])', payment_filter)
+    if filter_match:
+        status, period_number = filter_match.groups()
+        attribute_name = f'payment_amount_{period_number}'
+        students = [
+            student for student in students
+            if bool(getattr(student, attribute_name)) == (status == 'paid')
+        ]
+    students = sort_students_for_lists(students)
     subject_by_student = {}
     enrollments = Enrollment.objects.filter(student__in=students)
     if teacher:
@@ -867,6 +899,12 @@ def classroom_export(request, pk):
     details = [('Lớp', classroom.name)]
     if teacher:
         details.append(('Giảng viên', teacher.name))
+    if filter_match:
+        status, period_number = filter_match.groups()
+        details.append((
+            'Bộ lọc',
+            f'Đợt {period_number}: {"đã đóng" if status == "paid" else "chưa đóng"}',
+        ))
     return formatted_excel_response(
         f'DANH SÁCH HỌC SINH - {classroom.name}',
         ['STT', 'Học sinh', 'SĐT', 'Môn học', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
@@ -1446,7 +1484,7 @@ def payment_receipt(request, pk):
     if (
         not payment.receipt_pdf
         or not os.path.exists(payment.receipt_pdf.path)
-        or not payment.receipt_pdf.name.endswith('_a5_v2.pdf')
+        or not payment.receipt_pdf.name.endswith('_a5_v4.pdf')
     ):
         payment.generate_receipt_pdf()
         payment.refresh_from_db()
@@ -1463,7 +1501,7 @@ def payment_batch_receipt(request, pk):
     if (
         not batch.receipt_pdf
         or not os.path.exists(batch.receipt_pdf.path)
-        or not batch.receipt_pdf.name.endswith('_a5_v2.pdf')
+        or not batch.receipt_pdf.name.endswith('_a5_v17.pdf')
     ):
         batch.generate_receipt_pdf()
         batch.refresh_from_db()
@@ -1598,6 +1636,14 @@ def get_period_details(request, period_id):
 
 def teacher_detail(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
+    settlement_export_url = None
+    settlement_id = request.GET.get('download_settlement', '')
+    if settlement_id.isdigit():
+        settlement = TeacherSettlement.objects.filter(
+            pk=int(settlement_id), teacher=teacher
+        ).first()
+        if settlement:
+            settlement_export_url = reverse('teacher_settlement_export', args=[settlement.pk])
     subjects = teacher.subjects.all()
     
     # Get classrooms associated with this teacher
@@ -1620,6 +1666,7 @@ def teacher_detail(request, pk):
             students_list.append(student)
 
         attach_payment_period_amounts(students_list, teacher=teacher)
+        students_list = sort_students_for_lists(students_list)
             
         classroom_reports.append({
             'classroom': cls,
@@ -1641,6 +1688,7 @@ def teacher_detail(request, pk):
         'total_settled': total_settled,
         'total_pending_settlement': max(total_pending_settlement, Decimal('0')),
         'existing_classrooms': ClassRoom.objects.all().order_by('name'),
+        'settlement_export_url': settlement_export_url,
     })
 
 
@@ -1778,15 +1826,21 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
                         teacher_amount=teacher_amount,
                     )
                     settlement.payments.add(*payments)
-                    messages.success(request, 'Đã quyết toán cho giảng viên. File Excel đang được tải xuống.')
-                    return redirect('teacher_settlement_export', pk=settlement.pk)
+                    messages.success(request, 'Đã quyết toán cho giảng viên thành công. File Excel đang được tải xuống.')
+                    detail_url = reverse('teacher_detail', args=[teacher.id])
+                    return redirect(f'{detail_url}?download_settlement={settlement.pk}')
 
     selected_payments = list(_unsettled_teacher_payments(
         teacher, classroom, selected_period_numbers
     )) if selected_period_numbers else []
-    display_payments = list(_teacher_class_payments(
+    selected_student_ids = _teacher_class_payments(
         teacher, classroom, selected_period_numbers
-    ).prefetch_related('teacher_settlements')) if selected_period_numbers else []
+    ).values('student_id') if selected_period_numbers else []
+    display_payments = list(_teacher_class_payments(
+        teacher, classroom
+    ).filter(student_id__in=selected_student_ids).prefetch_related(
+        'teacher_settlements'
+    )) if selected_period_numbers else []
     revenue = sum((payment.amount for payment in selected_payments), Decimal('0'))
     teacher_amount = (revenue * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1'))
     return render(request, 'lms_manager/teacher_settlement.html', {
@@ -1808,46 +1862,54 @@ def teacher_settlement_export(request, pk):
     )
     # openpyxl is already a project dependency and is used for the existing Excel import flow.
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.styles import Alignment, Border, Side
     from openpyxl.worksheet.page import PageMargins
 
-    rows = _settlement_student_rows(settlement.payments.select_related(
+    payments = settlement.payments.select_related(
         'student', 'payment_period'
-    ).order_by('student__name', 'payment_date', 'id'))
+    ).order_by('student__name', 'payment_date', 'id')
+    rows = _settlement_student_rows(payments)
+    period_numbers = sorted({
+        number for payment in payments
+        if (number := _payment_period_number(payment.payment_period)) is not None
+    })
+    period_label = ', '.join(str(number) for number in period_numbers) or 'khác'
+    paid_student_count = len({payment.student_id for payment in payments})
+    unpaid_student_count = max(settlement.classroom.students.count() - paid_student_count, 0)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = 'Quyet toan'
     sheet.sheet_view.showGridLines = False
-    sheet.freeze_panes = 'A6'
+    sheet.freeze_panes = 'A7'
     sheet.merge_cells('A1:E1')
-    sheet['A1'] = f'QUYẾT TOÁN GIẢNG VIÊN - {settlement.teacher.name}'
-    sheet['A1'].font = Font(bold=True, size=14, color='FFFFFF')
-    sheet['A1'].fill = PatternFill('solid', fgColor='1D4ED8')
+    sheet['A1'] = f'QUYẾT TOÁN ĐỢT {period_label} - Thầy {settlement.teacher.name}'
     sheet['A1'].alignment = Alignment(horizontal='center')
     sheet.row_dimensions[1].height = 28
+    thin_border = Side(style='thin', color='B8C2CC')
+    grid_border = Border(left=thin_border, right=thin_border, top=thin_border, bottom=thin_border)
+    sheet['A1'].border = grid_border
     sheet.append(['Lớp', settlement.classroom.name])
     sheet.append(['Ngày quyết toán', timezone.localtime(settlement.settled_at).strftime('%d/%m/%Y %H:%M')])
+    sheet.append(['Tổng số học sinh đã đóng', paid_student_count])
+    sheet.append(['Tổng số học sinh chưa đóng', unpaid_student_count])
     sheet.append([])
-    for row_number in (2, 3):
-        sheet.cell(row=row_number, column=1).font = Font(bold=True, color='334155')
-        sheet.cell(row=row_number, column=2).font = Font(color='0F172A')
-    header_row = 5
+    for row_number in range(2, 6):
+        for column in range(1, 3):
+            sheet.cell(row=row_number, column=column).border = grid_border
+    header_row = 7
     headers = ['STT', 'Học sinh', 'SĐT', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
     sheet.append(headers)
     for cell in sheet[header_row]:
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = PatternFill('solid', fgColor='0F766E')
+        cell.border = grid_border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     sheet.row_dimensions[header_row].height = 26
-    thin_border = Side(style='thin', color='D9E2F3')
-    table_border = Border(bottom=thin_border)
     for index, row in enumerate(rows, start=1):
         sheet.append([index, row['student_name'], row['phone'], ', '.join(row['period_names']), int(row['amount'])])
         row_number = header_row + index
         sheet.row_dimensions[row_number].height = 21
         for column in range(1, 6):
             cell = sheet.cell(row=row_number, column=column)
-            cell.border = table_border
+            cell.border = grid_border
             cell.alignment = Alignment(
                 horizontal='right' if column == 5 else ('center' if column == 1 else 'left'),
                 vertical='center',
@@ -1855,29 +1917,19 @@ def teacher_settlement_export(request, pk):
             )
         sheet.cell(row=row_number, column=5).number_format = '#,##0'
     total_row = header_row + len(rows) + 1
-    sheet.cell(row=total_row, column=4, value='Tổng doanh thu')
-    sheet.cell(row=total_row, column=5, value=int(settlement.revenue))
-    sheet.cell(row=total_row + 1, column=4, value='Tỷ lệ giảng viên nhận')
-    sheet.cell(row=total_row + 1, column=5, value=float(settlement.teacher_share_rate))
-    sheet.cell(row=total_row + 1, column=5).number_format = '0%'
-    sheet.cell(row=total_row + 2, column=4, value='Tổng tiền giảng viên nhận')
-    sheet.cell(row=total_row + 2, column=5, value=int(settlement.teacher_amount))
-    for row_number in range(total_row, total_row + 3):
-        label_cell = sheet.cell(row=row_number, column=4)
-        value_cell = sheet.cell(row=row_number, column=5)
-        label_cell.font = Font(bold=True, color='0F172A')
-        value_cell.font = Font(bold=True, color='0F172A')
-        label_cell.fill = PatternFill('solid', fgColor='E2E8F0')
-        value_cell.fill = PatternFill('solid', fgColor='E2E8F0')
-        label_cell.alignment = Alignment(horizontal='right', vertical='center')
-        value_cell.alignment = Alignment(horizontal='right', vertical='center')
-        value_cell.number_format = '#,##0' if row_number != total_row + 1 else '0%'
-    sheet.cell(row=total_row + 2, column=4).fill = PatternFill('solid', fgColor='DCFCE7')
-    sheet.cell(row=total_row + 2, column=5).fill = PatternFill('solid', fgColor='DCFCE7')
+    sheet.cell(row=total_row, column=4, value='Tổng số tiền giảng viên nhận')
+    sheet.cell(row=total_row, column=5, value=int(settlement.teacher_amount))
+    label_cell = sheet.cell(row=total_row, column=4)
+    value_cell = sheet.cell(row=total_row, column=5)
+    label_cell.border = grid_border
+    value_cell.border = grid_border
+    label_cell.alignment = Alignment(horizontal='right', vertical='center')
+    value_cell.alignment = Alignment(horizontal='right', vertical='center')
+    value_cell.number_format = '#,##0'
     for column, width in {'A': 8, 'B': 28, 'C': 18, 'D': 32, 'E': 24}.items():
         sheet.column_dimensions[column].width = width
     sheet.auto_filter.ref = f'A{header_row}:E{header_row + len(rows)}'
-    sheet.print_area = f'A1:E{total_row + 2}'
+    sheet.print_area = f'A1:E{total_row}'
     sheet.print_title_rows = f'1:{header_row}'
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
@@ -1923,6 +1975,7 @@ def classroom_detail(request, pk):
             students_list.append(student)
 
         attach_payment_period_amounts(students_list, teacher=t)
+        students_list = sort_students_for_lists(students_list)
             
         teacher_reports.append({
             'teacher': t,
@@ -2112,7 +2165,7 @@ def classroom_import_excel(request, pk):
                 
             # Locate the header row.  Downloadable templates may include a
             # title and short instructions above the column headers.
-            required = ['Tên', 'SĐT', 'Lớp']
+            required = ['Tên', 'SĐT']
             header_row_index = None
             header_map = None
             headers = []
@@ -2149,16 +2202,14 @@ def classroom_import_excel(request, pk):
                     
                 name = row[header_map['Tên']].strip()
                 phone = row[header_map['SĐT']].strip()
-                class_name = row[header_map['Lớp']].strip()
-                
-                if not name or not class_name:
-                    messages.warning(request, f"Dòng {row_idx}: Bị bỏ quan vì thiếu Tên hoặc Lớp.")
+                if not name:
+                    messages.warning(request, f"Dòng {row_idx}: Bị bỏ qua vì thiếu Tên.")
                     continue
                     
                 capitalized_name = " ".join(word.capitalize() for word in name.split())
-                # This import is launched from a specific classroom.  Keep all
-                # imported students in that classroom even if the spreadsheet
-                # contains a different class name.
+                # This import is launched from a specific classroom.  Always
+                # keep imported students in that classroom, ignoring any
+                # optional Lớp column in the spreadsheet.
                 row_classroom = classroom
                 if teacher:
                     assign_teacher_to_classroom(teacher, row_classroom)

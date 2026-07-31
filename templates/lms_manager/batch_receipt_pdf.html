@@ -3,51 +3,69 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Phiếu thu học phí tổng hợp #{{ batch.id }}</title>
+  <title>Phiếu thu học phí #{{ batch.id }}</title>
   <style>
     @page { size: A5 portrait; margin: 9mm 9mm; }
     @font-face { font-family: 'Roboto'; src: url('/static/fonts/roboto/Roboto-Regular.ttf'); }
     @font-face { font-family: 'Roboto'; src: url('/static/fonts/roboto/Roboto-Bold.ttf'); font-weight: bold; }
-    body { font-family: 'Roboto', sans-serif; color: #202020; font-size: 8pt; line-height: 1.3; }
+    body { margin: 0; font-family: 'Roboto', sans-serif; color: #202020; font-size: 8pt; line-height: 1.3; }
+    .receipt { width: 100%; margin: 0 auto; }
     .company-header { width: 100%; border-bottom: 1px solid #555; padding-bottom: 6px; margin-bottom: 7px; }
     .company-header td { vertical-align: top; }
     .company-name { font-size: 10pt; font-weight: bold; text-transform: uppercase; }
     .company-info { font-size: 7.5pt; margin-top: 1px; }
     .receipt-number { text-align: right; font-size: 7.5pt; }
     .title { text-align: center; font-size: 14pt; font-weight: bold; margin-top: 5px; }
-    .date-line { text-align: center; font-size: 8pt; margin: 2px 0 9px; }
+    .payment-method { text-align: center; font-size: 8pt; margin: 2px 0 9px; }
     table { width: 100%; border-collapse: collapse; }
+    .payment-table { table-layout: fixed; }
     .payment-table th { background: #efefef; font-size: 7pt; font-weight: bold; text-align: center; }
     .payment-table th, .payment-table td { border: 1px solid #777; padding: 4px 3px; vertical-align: top; }
+    /* Set widths on table cells too: xhtml2pdf does not reliably honor <col> CSS alone. */
+    .payment-table th:nth-child(1), .payment-table td:nth-child(1) { width: 6%; }
+    .payment-table th:nth-child(2), .payment-table td:nth-child(2) { width: 31%; }
+    .payment-table th:nth-child(3), .payment-table td:nth-child(3) { width: 13%; }
+    .payment-table th:nth-child(4), .payment-table td:nth-child(4) { width: 22%; }
+    .payment-table th:nth-child(5), .payment-table td:nth-child(5) { width: 8%; }
+    .payment-table th:nth-child(6), .payment-table td:nth-child(6) { width: 20%; }
+    .payment-table .stt-column { width: 6%; }
+    .payment-table .student-column { width: 31%; }
+    .payment-table .class-column { width: 13%; }
+    .payment-table .teacher-column { width: 22%; }
+    .payment-table .period-column { width: 8%; }
+    .payment-table .amount-column { width: 20%; }
     .center { text-align: center; }
     .amount { text-align: right; white-space: nowrap; }
     .total { margin-top: 9px; width: 55%; margin-left: auto; }
     .total td { border: 0; padding: 3px; }
     .total .label { font-size: 9pt; font-weight: bold; }
     .total .value { font-size: 11pt; font-weight: bold; text-align: right; }
-    .signatures { margin-top: 22px; }
+    .signatures { margin-top: 22px; table-layout: fixed; }
     .signatures td { border: 0; width: 50%; text-align: center; font-size: 8pt; }
     .signature-space { height: 38px; }
     .footer { border-top: 1px solid #bbb; margin-top: 9px; padding-top: 4px; text-align: center; color: #555; font-size: 7pt; }
   </style>
 </head>
 <body>
+  <div class="receipt">
   <table class="company-header">
     <tr>
       <td>
         <div class="company-name">Công Ty TNHH Sao Khuê</div>
         <div class="company-info">Địa chỉ: Xã Thới Bình, Cà Mau</div>
-        <div class="company-info">SĐT: ................................</div>
+        <div class="company-info">SĐT: 0917272780</div>
       </td>
-      <td class="receipt-number"><strong>PHIẾU SỐ: PTT-{{ batch.id|stringformat:"06d" }}</strong><br>Ngày thu: {{ batch.payment_date|date:"d/m/Y" }}</td>
+      <td class="receipt-number"><strong>Ngày thu: {{ batch.payment_date|date:"d/m/Y" }}</strong></td>
     </tr>
   </table>
 
-  <div class="title">PHIẾU THU HỌC PHÍ TỔNG HỢP</div>
-  <div class="date-line">Ngày {{ batch.payment_date|date:"d" }} tháng {{ batch.payment_date|date:"m" }} năm {{ batch.payment_date|date:"Y" }}</div>
-  <div class="date-line">Hình thức thu: <strong>{{ payment_method_display }}</strong></div>
-
+  <div class="title">PHIẾU THU HỌC PHÍ </div>
+  <div class="payment-method">Hình thức thu: <strong>{{ payment_method_display }}</strong></div>
   <table class="payment-table">
+    <colgroup>
+      <col class="stt-column" width="6%"><col class="student-column" width="31%"><col class="class-column" width="13%">
+      <col class="teacher-column" width="22%"><col class="period-column" width="8%"><col class="amount-column" width="20%">
+    </colgroup>
     <thead>
       <tr><th>STT</th><th>Học sinh</th><th>Lớp</th><th>Giảng viên</th><th>Đợt</th><th>Số tiền</th></tr>
     </thead>
@@ -66,7 +84,12 @@
   </table>
 
   <table class="total"><tr><td class="label">TỔNG ĐÃ THU:</td><td class="value">{{ total_amount|floatformat:0|intcomma }} VNĐ</td></tr></table>
-  <table class="signatures"><tr><td><strong>Người nộp tiền</strong><div class="signature-space"></div></td><td><strong>Người thu tiền</strong><div class="signature-space"></div><strong>Công Ty TNHH Sao Khuê</strong></td></tr></table>
+  <table class="signatures">
+    <tr><td width="50%" align="center"><strong>Người nộp tiền</strong></td><td width="50%" align="center"><strong>Người thu tiền</strong></td></tr>
+    <tr><td><div class="signature-space">{% if receipt_is_short %}<br><br><br><br><br>{% endif %}</div></td><td><div class="signature-space">{% if receipt_is_short %}<br><br><br><br><br>{% endif %}</div></td></tr>
+    <tr><td></td><td align="center"><strong>Công Ty TNHH Sao Khuê</strong></td></tr>
+  </table>
   <div class="footer">Cảm ơn quý phụ huynh/học sinh đã thanh toán học phí.</div>
+  </div>
 </body>
 </html>

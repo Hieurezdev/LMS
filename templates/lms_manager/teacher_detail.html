@@ -316,6 +316,12 @@
 {% endblock content %}
 
 {% block js %}
+{% if settlement_export_url %}
+<iframe src="{{ settlement_export_url }}" title="Tải file Excel quyết toán" style="display:none;"></iframe>
+<script>
+  window.history.replaceState({}, document.title, window.location.pathname);
+</script>
+{% endif %}
 <script>
   function getCookie(name) {
       let cookieValue = null;

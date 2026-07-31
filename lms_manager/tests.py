@@ -75,7 +75,7 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(by_phone, other_teacher.name)
         self.assertNotContains(by_phone, self.teacher.name)
 
-    def test_teacher_with_settlement_cannot_be_deleted(self):
+    def test_teacher_with_settlement_can_be_deleted_after_confirmation(self):
         settlement = TeacherSettlement.objects.create(
             teacher=self.teacher,
             classroom=self.classroom,
@@ -84,18 +84,21 @@ class LMSManagerQueryTest(TestCase):
         )
         settlement.payments.add(self.payment)
 
-        response = self.client.post(reverse('teacher_delete', args=[self.teacher.id]), follow=True)
+        with translation.override('en'):
+            response = self.client.post(reverse('teacher_delete', args=[self.teacher.id]), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(Teacher.objects.filter(pk=self.teacher.id).exists())
-        self.assertContains(response, 'Không thể xóa giảng viên')
+        self.assertFalse(Teacher.objects.filter(pk=self.teacher.id).exists())
+        self.assertFalse(TeacherSettlement.objects.filter(pk=settlement.pk).exists())
+        self.assertContains(response, 'Đã xóa giảng viên')
 
     def test_teacher_without_settlement_can_be_deleted(self):
         teacher = Teacher.objects.create(name='Temporary teacher')
 
-        response = self.client.post(reverse('teacher_delete', args=[teacher.id]))
+        with translation.override('en'):
+            response = self.client.post(reverse('teacher_delete', args=[teacher.id]))
 
-        self.assertRedirects(response, reverse('teacher_list'))
+        self.assertEqual(response['Location'], '/en/teachers/')
         self.assertFalse(Teacher.objects.filter(pk=teacher.id).exists())
 
     def test_student_and_classroom_exports_are_formatted_xlsx_for_a4_printing(self):
@@ -121,6 +124,13 @@ class LMSManagerQueryTest(TestCase):
                 self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
                 self.assertEqual(worksheet.page_setup.fitToWidth, 1)
                 self.assertEqual(worksheet.page_setup.fitToHeight, 1)
+                header = next(
+                    cell for row in worksheet.iter_rows() for cell in row if cell.value == 'STT'
+                )
+                self.assertEqual(header.border.left.style, 'thin')
+                self.assertEqual(header.border.right.style, 'thin')
+                self.assertEqual(header.border.top.style, 'thin')
+                self.assertEqual(header.border.bottom.style, 'thin')
 
     def test_student_list_paid_amount_is_derived_from_recorded_payments(self):
         self.payment_period.name = "Đợt 1"
@@ -155,7 +165,7 @@ class LMSManagerQueryTest(TestCase):
     def test_excel_import_uses_the_selected_classroom_and_teacher(self):
         upload = SimpleUploadedFile(
             'students.csv',
-            'Tên,SĐT,Lớp\nNguyen Van C,0900000000,Lớp khác\n'.encode('utf-8'),
+            'Tên,SĐT\nNguyen Van C,0900000000\n'.encode('utf-8'),
             content_type='text/csv',
         )
         with translation.override('en'):
@@ -217,6 +227,29 @@ class LMSManagerQueryTest(TestCase):
         self.assertFalse(Enrollment.objects.filter(student=self.student1, teacher=self.teacher).exists())
         self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
 
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_settlement_keeps_paid_status_from_other_periods_visible(self, _payment_pdf):
+        period2 = PaymentPeriod.objects.create(
+            name='Period 2', teacher=self.teacher, subject=self.subject
+        )
+        Payment.objects.create(
+            student=self.student1,
+            classroom=self.classroom,
+            subject=self.subject,
+            teacher=self.teacher,
+            payment_period=period2,
+            amount=150000,
+        )
+
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1]},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '150,000 VNĐ')
+
     def test_classroom_detail_shows_paid_amount_instead_of_paid_status(self):
         with translation.override('en'):
             response = self.client.get(reverse('classroom_detail', args=[self.classroom.id]))
@@ -231,6 +264,20 @@ class LMSManagerQueryTest(TestCase):
             response,
             f'/teachers/{self.teacher.id}/classes/{self.classroom.id}/students/{self.student1.id}/remove/',
         )
+
+    def test_classroom_export_respects_payment_period_filter(self):
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('classroom_export', args=[self.classroom.id]),
+                {'teacher': self.teacher.id, 'payment_filter': 'paid-1'},
+            )
+
+        from openpyxl import load_workbook
+        worksheet = load_workbook(io.BytesIO(response.content), data_only=True).active
+        exported_values = [cell.value for row in worksheet.iter_rows() for cell in row]
+        self.assertIn(self.student1.name, exported_values)
+        self.assertNotIn(self.student2.name, exported_values)
+        self.assertIn('Đợt 1: đã đóng', exported_values)
 
     @patch('lms_manager.models.Payment.generate_receipt_pdf')
     def test_teacher_can_settle_multiple_periods_once_and_download_excel(self, _payment_pdf):
@@ -268,7 +315,12 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(settlement.teacher_amount, 200000)
         self.assertEqual(settlement.payments.count(), 2)
 
-        export = self.client.get(response['Location'])
+        self.assertEqual(
+            response['Location'],
+            f'/en/teachers/{self.teacher.id}/?download_settlement={settlement.pk}',
+        )
+        with translation.override('en'):
+            export = self.client.get(reverse('teacher_settlement_export', args=[settlement.pk]))
         self.assertEqual(export.status_code, 200)
         self.assertEqual(
             export['Content-Type'],
@@ -277,9 +329,11 @@ class LMSManagerQueryTest(TestCase):
         self.assertTrue(export.content.startswith(b'PK'))
         from openpyxl import load_workbook
         worksheet = load_workbook(io.BytesIO(export.content), data_only=True).active
-        self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN GIẢNG VIÊN - Mr. Smith')
-        self.assertEqual(worksheet['E8'].value, 250000)
+        self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN ĐỢT 1, 2 - Thầy Mr. Smith')
+        self.assertEqual(worksheet['B4'].value, 2)
+        self.assertEqual(worksheet['B5'].value, 0)
         self.assertEqual(worksheet['E10'].value, 200000)
+        self.assertNotIn('Tổng doanh thu', [cell.value for row in worksheet.iter_rows() for cell in row])
         self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
         self.assertEqual(worksheet.page_setup.orientation, worksheet.ORIENTATION_LANDSCAPE)
         self.assertEqual(worksheet.page_setup.fitToWidth, 1)

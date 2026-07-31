@@ -101,12 +101,11 @@
           <a href="{% url 'teacher_edit' t.id %}" class="btn btn-outline-secondary btn-sm">
             <i class="fas fa-edit"></i>
           </a>
-          <form method="post" action="{% url 'teacher_delete' t.id %}" class="d-inline" onsubmit="return confirm('Xóa giảng viên này?');">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa giảng viên">
-              <i class="fas fa-trash"></i>
-            </button>
-          </form>
+          <button type="button" class="btn btn-outline-danger btn-sm teacher-delete-trigger"
+                  title="Xóa giảng viên" data-bs-toggle="modal" data-bs-target="#teacher-delete-modal"
+                  data-teacher-name="{{ t.name|escapejs }}" data-delete-url="{% url 'teacher_delete' t.id %}">
+            <i class="fas fa-trash"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -126,4 +125,37 @@
     {% endfor %}
   </div>
 </div>
+
+<div class="modal fade" id="teacher-delete-modal" tabindex="-1" aria-labelledby="teacher-delete-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 rounded-4 shadow">
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold text-danger" id="teacher-delete-title"><i class="fas fa-exclamation-triangle me-2"></i>Xác nhận xóa giảng viên</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Bạn có muốn xóa giảng viên <strong id="teacher-delete-name"></strong> không?</p>
+        <div class="alert alert-warning mb-0 small"><i class="fas fa-info-circle me-1"></i>Toàn bộ phân công lớp, học phí và dữ liệu quyết toán liên quan cũng sẽ bị xóa.</div>
+      </div>
+      <div class="modal-footer border-top">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+        <form method="post" id="teacher-delete-form">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger"><i class="fas fa-trash me-1"></i>Xóa giảng viên</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock content %}
+
+{% block js %}
+<script>
+  document.querySelectorAll('.teacher-delete-trigger').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.getElementById('teacher-delete-name').textContent = button.dataset.teacherName;
+      document.getElementById('teacher-delete-form').action = button.dataset.deleteUrl;
+    });
+  });
+</script>
+{% endblock js %}

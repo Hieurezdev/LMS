@@ -15,6 +15,50 @@
     </div>
 </div>
 
+<!-- Summary statistics -->
+<div class="row g-3 mb-4 dashboard-stat-grid">
+    <div class="col-12 col-sm-6 col-xl">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
+            <div class="d-flex align-items-start">
+                <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 me-3"><i class="fas fa-wallet fa-lg"></i></div>
+                <div><h6 class="mb-1 text-secondary small">Tổng doanh thu</h6><h4 class="mb-0 fw-bold text-dark">{{ total_revenue|floatformat:0|intcomma }} <span class="small fs-6">VNĐ</span></h4></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
+            <div class="d-flex align-items-start">
+                <div class="p-2 bg-success bg-opacity-10 text-success rounded-3 me-3"><i class="fas fa-calendar-day fa-lg"></i></div>
+                <div><h6 class="mb-1 text-secondary small">Doanh thu hôm nay</h6><h4 class="mb-0 fw-bold text-dark">{{ today_revenue|floatformat:0|intcomma }} <span class="small fs-6">VNĐ</span></h4><span class="small text-secondary">{{ today|date:"d/m/Y" }}</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
+            <div class="d-flex align-items-start">
+                <div class="p-2 bg-info bg-opacity-10 text-info rounded-3 me-3"><i class="fas fa-user-graduate fa-lg"></i></div>
+                <div><h6 class="mb-1 text-secondary small">Học sinh</h6><h4 class="mb-0 fw-bold text-dark">{{ student_count }}</h4></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl">
+        <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
+            <div class="d-flex align-items-start">
+                <div class="p-2 bg-dark bg-opacity-10 rounded-3 me-3"><i class="fas fa-chalkboard-teacher fa-lg"></i></div>
+                <div><h6 class="mb-1 text-secondary small">Giảng viên</h6><h4 class="mb-0 fw-bold text-dark">{{ teacher_count }}</h4></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl">
+        <div class="card border-0 shadow-sm rounded-4 p-3 bg-light text-dark h-100 dashboard-stat-card">
+            <div class="d-flex align-items-start">
+                <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 me-3"><i class="fas fa-school fa-lg"></i></div>
+                <div><h6 class="mb-1 text-secondary small">Lớp / Môn học</h6><h4 class="mb-0 fw-bold">{{ class_count }} / {{ subject_count }}</h4></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Shortcuts -->
 <div class="row g-3 mb-4">
     <div class="col-12">
@@ -111,7 +155,7 @@
 
 <!-- Công nợ nổi bật -->
 <div class="row g-3 mb-4">
-    <div class="col-12 col-md-4">
+    <div class="col-12 col-md-2">
         <a href="{% url 'debt_dashboard' %}" class="text-decoration-none">
             <div class="card border-0 shadow-sm rounded-4 p-3 h-100 {% if debt_total_count > 0 %}bg-danger text-white{% else %}bg-success text-white{% endif %}">
                 <div class="d-flex align-items-center">
@@ -127,7 +171,7 @@
         </a>
     </div>
 
-    <div class="col-12 col-md-8">
+    <div class="col-12 col-md-10">
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="fw-bold text-dark mb-0">
@@ -137,7 +181,7 @@
                     {{ overdue_students|length }} học sinh
                 </span>
             </div>
-            <div class="table-responsive" style="max-height: 220px; overflow-y: auto;">
+            <div class="table-responsive" style="max-height: 330px; overflow-y: auto;">
                 <table class="table table-sm table-hover mb-0">
                     <thead class="table-light small">
                         <tr>
@@ -184,60 +228,25 @@
     </div>
 </div>
 
-<!-- Stats Cards -->
-<div class="row g-4 mb-4">
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 p-3 bg-primary text-white">
-            <div class="d-flex align-items-center">
-                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
-                    <i class="fas fa-wallet fa-2x"></i>
-                </div>
-                <div>
-                    <h6 class="mb-0 text-white-50 small">Tổng doanh thu</h6>
-                    <h3 class="mb-0 fw-bold">{{ total_revenue|floatformat:0|intcomma }} <span class="small fs-6">VNĐ</span></h3>
-                </div>
+<!-- Daily revenue -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold text-dark mb-0"><i class="fas fa-calendar-alt text-success me-2"></i>Doanh thu theo ngày</h6>
+                <span class="text-secondary small">14 ngày thu gần nhất</span>
             </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 p-3 bg-success text-white">
-            <div class="d-flex align-items-center">
-                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
-                    <i class="fas fa-user-graduate fa-2x"></i>
-                </div>
-                <div>
-                    <h6 class="mb-0 text-white-50 small">Tổng số học sinh</h6>
-                    <h3 class="mb-0 fw-bold">{{ student_count }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 p-3 bg-info text-white">
-            <div class="d-flex align-items-center">
-                <div class="p-3 bg-white bg-opacity-25 rounded-3 me-3">
-                    <i class="fas fa-chalkboard-teacher fa-2x"></i>
-                </div>
-                <div>
-                    <h6 class="mb-0 text-white-50 small">Tổng số giảng viên</h6>
-                    <h3 class="mb-0 fw-bold">{{ teacher_count }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-12 col-sm-6 col-xl-3">
-        <div class="card border-0 shadow-sm rounded-4 p-3 bg-warning text-dark">
-            <div class="d-flex align-items-center">
-                <div class="p-3 bg-dark bg-opacity-10 rounded-3 me-3">
-                    <i class="fas fa-book-open fa-2x"></i>
-                </div>
-                <div>
-                    <h6 class="mb-0 text-black-50 small">Lớp & Môn học</h6>
-                    <h3 class="mb-0 fw-bold">{{ class_count }} Lớp / {{ subject_count }} Môn</h3>
-                </div>
+            <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light"><tr><th>Ngày thu</th><th class="text-center">Số khoản thu</th><th class="text-end">Doanh thu (VNĐ)</th></tr></thead>
+                    <tbody>
+                        {% for item in revenue_by_day %}
+                        <tr><td class="fw-semibold">{{ item.payment_date|date:"d/m/Y" }}</td><td class="text-center">{{ item.payment_count }}</td><td class="text-end fw-bold text-success">{{ item.total|floatformat:0|intcomma }}</td></tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-secondary py-3">Chưa có khoản thu nào.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
