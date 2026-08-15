@@ -28,7 +28,7 @@
                 <!-- Datalist for student name autocomplete -->
                 <datalist id="student-list">
                     {% for s in existing_students %}
-                        <option value="{{ s.name }} (Lớp {{ s.classroom.name }}{% if s.phone %} - SĐT: {{ s.phone }}{% endif %})">
+                        <option value="{{ s.name }} (Lớp {{ s.classroom.name }})">
                     {% endfor %}
                 </datalist>
                 
@@ -59,7 +59,7 @@
         // Map containing existing students
         const studentsData = {};
         {% for s in existing_students %}
-            studentsData["{{ s.name|escapejs }} (Lớp {{ s.classroom.name|escapejs }}{% if s.phone %} - SĐT: {{ s.phone|escapejs }}{% endif %})"] = "{{ s.id }}";
+            studentsData["{{ s.name|escapejs }} (Lớp {{ s.classroom.name|escapejs }})"] = "{{ s.id }}";
             if (!studentsData["{{ s.name|escapejs }}"]) {
                 studentsData["{{ s.name|escapejs }}"] = "{{ s.id }}";
             }
@@ -67,7 +67,7 @@
 
         function getCleanStudentName(val) {
             val = val.trim();
-            const match = val.match(/^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$/i);
+            const match = val.match(/^(.+?)\s*\(\s*Lớp\s+(.+?)\s*\)$/i);
             return match ? match[1].trim() : val;
         }
 

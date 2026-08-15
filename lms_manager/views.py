@@ -6,12 +6,13 @@ import re
 from decimal import Decimal, InvalidOperation
 from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
-from django.http import JsonResponse, HttpResponse
+from django.http import FileResponse, HttpResponseForbidden, JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.db.models import Sum, Count, Q
 from django.db import transaction, DatabaseError
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod, PaymentBatch, TeacherSettlement
 from .forms import ClassRoomForm, SubjectForm, TeacherForm, StudentForm, EnrollmentForm, PaymentForm, PaymentPeriodForm
@@ -178,8 +179,33 @@ def dashboard_view(request):
         'setup_all_done': all_done,
         'debt_total_count': debt_total_count,
         'overdue_students': overdue_students,
+        'pending_cashier_accounts': get_user_model().objects.filter(
+            role='cashier', is_approved=False, is_active=True, is_superuser=False
+        ).order_by('date_joined'),
     }
     return render(request, 'lms_manager/dashboard.html', context)
+
+
+@require_POST
+def approve_cashier_account(request, user_id):
+    User = get_user_model()
+    account = get_object_or_404(User, pk=user_id, role='cashier')
+    account.is_approved = True
+    account.is_active = True
+    account.save(update_fields=['is_approved', 'is_active'])
+    messages.success(request, f"Đã duyệt tài khoản thu ngân {account.username}.")
+    return redirect('home')
+
+
+@require_POST
+def reject_cashier_account(request, user_id):
+    User = get_user_model()
+    account = get_object_or_404(User, pk=user_id, role='cashier')
+    account.is_approved = False
+    account.is_active = False
+    account.save(update_fields=['is_approved', 'is_active'])
+    messages.success(request, f"Đã từ chối tài khoản {account.username}.")
+    return redirect('home')
 
 
 # -------------------------------------------------------------
@@ -255,6 +281,67 @@ def debt_dashboard(request):
     return render(request, 'lms_manager/debt_dashboard.html', context)
 
 
+def daily_revenue_report(request):
+    """Searchable daily revenue ledger, calculated from persisted payments."""
+    start = request.GET.get('start', '').strip()
+    end = request.GET.get('end', '').strip()
+    payments = Payment.objects.all()
+    try:
+        if start:
+            payments = payments.filter(payment_date__gte=datetime.date.fromisoformat(start))
+        if end:
+            payments = payments.filter(payment_date__lte=datetime.date.fromisoformat(end))
+    except ValueError:
+        messages.error(request, 'Ngày tra cứu không hợp lệ.')
+        start = end = ''
+        payments = Payment.objects.all()
+
+    revenue_by_day = list(
+        payments.values('payment_date')
+        .annotate(total=Sum('amount'), payment_count=Count('id'))
+        .order_by('-payment_date')
+    )
+    total_revenue = payments.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    return render(request, 'lms_manager/daily_revenue_report.html', {
+        'revenue_by_day': revenue_by_day,
+        'total_revenue': total_revenue,
+        'start': start,
+        'end': end,
+    })
+
+
+def cashier_due_list(request):
+    """Read-only arrears view available to cashiers for collecting tuition."""
+    selected_period = request.GET.get('period', '').strip()
+    periods = PaymentPeriod.objects.select_related('teacher', 'subject').order_by(
+        'teacher__name', 'name', 'subject__name'
+    )
+    if selected_period in {str(number) for number in range(1, 9)}:
+        periods = periods.filter(name=f'Đợt {selected_period}')
+
+    reports = []
+    total_unpaid = 0
+    for period in periods:
+        enrollments = Enrollment.objects.filter(
+            teacher=period.teacher,
+            subject=period.subject,
+            student__classroom__isnull=False,
+        ).exclude(student__payments__payment_period=period).select_related(
+            'student', 'student__classroom'
+        ).order_by('student__classroom__name', 'student__name')
+        records = list(enrollments)
+        if not records:
+            continue
+        total_unpaid += len(records)
+        reports.append({'period': period, 'records': records})
+
+    return render(request, 'lms_manager/cashier_due_list.html', {
+        'reports': reports,
+        'total_unpaid': total_unpaid,
+        'selected_period': selected_period,
+    })
+
+
 # -------------------------------------------------------------
 # CLASSROOM CRUD
 # -------------------------------------------------------------
@@ -315,12 +402,30 @@ def classroom_delete(request, pk):
     return redirect('classroom_list')
 
 
+@require_POST
+def classroom_delete_all(request):
+    count = ClassRoom.objects.count()
+    TeacherSettlement.objects.all().delete()
+    ClassRoom.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} lớp học và dữ liệu liên quan.")
+    return redirect('classroom_list')
+
+
 # -------------------------------------------------------------
 # SUBJECT CRUD
 # -------------------------------------------------------------
 def subject_list(request):
     subjects = Subject.objects.all().order_by('name')
     return render(request, 'lms_manager/subject_list.html', {'subjects': subjects})
+
+
+@require_POST
+def subject_delete_all(request):
+    count = Subject.objects.count()
+    PaymentBatch.objects.all().delete()
+    Subject.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} môn học và dữ liệu liên quan.")
+    return redirect('subject_list')
 
 def subject_create(request):
     if request.method == 'POST':
@@ -554,6 +659,16 @@ def teacher_delete(request, pk):
         request,
         f"Đã xóa giảng viên và {settlement_count} dữ liệu quyết toán liên quan.",
     )
+    return redirect('teacher_list')
+
+
+@require_POST
+def teacher_delete_all(request):
+    count = Teacher.objects.count()
+    TeacherSettlement.objects.all().delete()
+    PaymentBatch.objects.all().delete()
+    Teacher.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} giảng viên và dữ liệu liên quan.")
     return redirect('teacher_list')
 
 
@@ -830,13 +945,13 @@ def student_list_export(request):
     rows = []
     for index, student in enumerate(students, start=1):
         rows.append([
-            index, student.name, student.phone or '', student.classroom.name if student.classroom else '',
+            index, student.name, student.classroom.name if student.classroom else '',
             student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
             *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
         ])
     return formatted_excel_response(
         'DANH SÁCH HỌC SINH',
-        ['STT', 'Học sinh', 'SĐT', 'Lớp', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
+        ['STT', 'Học sinh', 'Lớp', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
         rows,
         'danh_sach_hoc_sinh.xlsx',
     )
@@ -892,7 +1007,7 @@ def classroom_export(request, pk):
     rows = []
     for index, student in enumerate(students, start=1):
         rows.append([
-            index, student.name, student.phone or '', ', '.join(subject_by_student.get(student.id, [])),
+            index, student.name, ', '.join(subject_by_student.get(student.id, [])),
             student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
             *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
         ])
@@ -907,7 +1022,7 @@ def classroom_export(request, pk):
         ))
     return formatted_excel_response(
         f'DANH SÁCH HỌC SINH - {classroom.name}',
-        ['STT', 'Học sinh', 'SĐT', 'Môn học', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
+        ['STT', 'Học sinh', 'Môn học', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]],
         rows,
         f'danh_sach_lop_{classroom.id}.xlsx',
         details,
@@ -1007,6 +1122,15 @@ def student_delete(request, pk):
     messages.success(request, "Đã xóa học sinh!")
     return redirect('student_list')
 
+
+@require_POST
+def student_delete_all(request):
+    count = Student.objects.count()
+    PaymentBatch.objects.all().delete()
+    Student.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} học sinh và dữ liệu liên quan.")
+    return redirect('student_list')
+
 def student_register(request, student_id):
     student = get_object_or_404(Student, pk=student_id)
     enrollments = Enrollment.objects.filter(student=student)
@@ -1057,12 +1181,21 @@ def payment_list(request):
     return render(request, 'lms_manager/payment_list.html', {'payments': payments})
 
 
+@require_POST
+def payment_delete_all(request):
+    count = Payment.objects.count()
+    PaymentBatch.objects.all().delete()
+    Payment.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} giao dịch học phí.")
+    return redirect('payment_list')
+
+
 def _payment_period_number(period_name):
     match = re.fullmatch(r'Đợt\s+([1-8])', period_name.strip())
     return int(match.group(1)) if match else None
 
 
-def _create_batch_payments(items, payment_date, payment_method='cash'):
+def _create_batch_payments(items, payment_date, payment_method='cash', created_by=None):
     """Create individual payments and their one combined customer receipt."""
     if not isinstance(items, list) or not items:
         raise ValueError('Hãy thêm ít nhất một khoản thu.')
@@ -1112,7 +1245,7 @@ def _create_batch_payments(items, payment_date, payment_method='cash'):
             prepared_items.append((student, teacher, enrollment.subject, period_num, amount))
 
     with transaction.atomic():
-        batch = PaymentBatch.objects.create(payment_date=payment_date)
+        batch = PaymentBatch.objects.create(payment_date=payment_date, created_by=created_by)
         payments = []
         for student, teacher, subject, period_num, amount in prepared_items:
             period, _ = PaymentPeriod.objects.get_or_create(
@@ -1151,6 +1284,7 @@ def payment_create(request):
                     items,
                     payment_date,
                     request.POST.get('payment_method', 'cash'),
+                    request.user,
                 )
             except DatabaseError:
                 error = 'Cơ sở dữ liệu chưa được cập nhật cho tính năng thu học phí. Hãy chạy lệnh migrate rồi thử lại.'
@@ -1169,7 +1303,9 @@ def payment_create(request):
                     return JsonResponse({
                         'success': True,
                         'receipt_url': receipt_url,
-                        'redirect_url': reverse('payment_list'),
+                        'redirect_url': reverse(
+                            'cashier_due_list' if request.user.is_cashier else 'payment_list'
+                        ),
                     })
                 return redirect(receipt_url)
 
@@ -1177,18 +1313,16 @@ def payment_create(request):
         if form.is_valid():
             payment = form.save(commit=False)
             
-            # Get typed student name and parse name, classroom, phone
+            # Get typed student name and parse name, classroom.
             raw_name = form.cleaned_data.get('student_name', '').strip()
             
-            match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$", raw_name, re.IGNORECASE)
+            match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)\s*\)$", raw_name, re.IGNORECASE)
             if match:
                 clean_name = match.group(1).strip()
                 classroom_name = match.group(2).strip()
-                phone = match.group(3).strip() if match.group(3) else None
             else:
                 clean_name = raw_name
                 classroom_name = None
-                phone = None
                 
             capitalized_name = " ".join(word.capitalize() for word in clean_name.split())
             
@@ -1198,8 +1332,6 @@ def payment_create(request):
                     name=capitalized_name,
                     classroom__name__iexact=classroom_name
                 )
-                if phone:
-                    student = student.filter(phone=phone)
                 student = student.first()
             
             if not student:
@@ -1230,7 +1362,6 @@ def payment_create(request):
                 
                 student = Student.objects.create(
                     name=capitalized_name,
-                    phone=phone,
                     classroom=classroom
                 )
                 created = True
@@ -1369,15 +1500,13 @@ def payment_edit(request, pk):
         form = PaymentForm(request.POST, instance=payment)
         if form.is_valid():
             raw_name = form.cleaned_data.get('student_name', '').strip()
-            match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)(?:\s*-\s*SĐT:\s*(.+?))?\s*\)$", raw_name, re.IGNORECASE)
+            match = re.match(r"^(.+?)\s*\(\s*Lớp\s+(.+?)\s*\)$", raw_name, re.IGNORECASE)
             if match:
                 clean_name = match.group(1).strip()
                 classroom_name = match.group(2).strip()
-                phone = match.group(3).strip() if match.group(3) else None
             else:
                 clean_name = raw_name
                 classroom_name = None
-                phone = None
                 
             capitalized_name = " ".join(word.capitalize() for word in clean_name.split())
             
@@ -1387,8 +1516,6 @@ def payment_edit(request, pk):
                     name=capitalized_name,
                     classroom__name__iexact=classroom_name
                 )
-                if phone:
-                    student = student.filter(phone=phone)
                 student = student.first()
             if not student:
                 student = Student.objects.filter(name=capitalized_name).first()
@@ -1479,6 +1606,8 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 @xframe_options_sameorigin
 def payment_receipt(request, pk):
+    if request.user.is_cashier:
+        return HttpResponseForbidden('Thu ngân chỉ được mở biên lai tổng do mình tạo.')
     payment = get_object_or_404(Payment, pk=pk)
     import os
     if (
@@ -1497,6 +1626,8 @@ def payment_receipt(request, pk):
 @xframe_options_sameorigin
 def payment_batch_receipt(request, pk):
     batch = get_object_or_404(PaymentBatch, pk=pk)
+    if request.user.is_cashier and batch.created_by_id != request.user.id:
+        return HttpResponseForbidden('Bạn không có quyền mở biên lai này.')
     import os
     if (
         not batch.receipt_pdf
@@ -1509,6 +1640,24 @@ def payment_batch_receipt(request, pk):
     response = HttpResponse(batch.receipt_pdf.read(), content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="batch_receipt_{batch.id}.pdf"'
     return response
+
+
+def protected_receipt_file(request, receipt_path):
+    """Prevent direct media URLs from bypassing receipt access rules."""
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden('Vui lòng đăng nhập để xem biên lai.')
+    stored_name = f'receipts/{receipt_path}'
+    if receipt_path.startswith('batches/'):
+        batch = get_object_or_404(PaymentBatch, receipt_pdf=stored_name)
+        if request.user.is_cashier and batch.created_by_id != request.user.id:
+            return HttpResponseForbidden('Bạn không có quyền mở biên lai này.')
+        receipt = batch.receipt_pdf
+    else:
+        if request.user.is_cashier:
+            return HttpResponseForbidden('Thu ngân không có quyền mở biên lai cá nhân.')
+        payment = get_object_or_404(Payment, receipt_pdf=stored_name)
+        receipt = payment.receipt_pdf
+    return FileResponse(receipt.open('rb'), content_type='application/pdf')
 
 
 # -------------------------------------------------------------
@@ -1744,7 +1893,6 @@ def _settlement_student_rows(payments, period_numbers=None):
     for payment in payments:
         row = rows.setdefault(payment.student_id, {
             'student_name': payment.student.name,
-            'phone': payment.student.phone or '',
             'period_names': [],
             'amounts_by_period_number': {},
             'settled_amounts_by_period_number': {},
@@ -1897,39 +2045,39 @@ def teacher_settlement_export(request, pk):
         for column in range(1, 3):
             sheet.cell(row=row_number, column=column).border = grid_border
     header_row = 7
-    headers = ['STT', 'Học sinh', 'SĐT', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
+    headers = ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
     sheet.append(headers)
     for cell in sheet[header_row]:
         cell.border = grid_border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     sheet.row_dimensions[header_row].height = 26
     for index, row in enumerate(rows, start=1):
-        sheet.append([index, row['student_name'], row['phone'], ', '.join(row['period_names']), int(row['amount'])])
+        sheet.append([index, row['student_name'], ', '.join(row['period_names']), int(row['amount'])])
         row_number = header_row + index
         sheet.row_dimensions[row_number].height = 21
-        for column in range(1, 6):
+        for column in range(1, 5):
             cell = sheet.cell(row=row_number, column=column)
             cell.border = grid_border
             cell.alignment = Alignment(
-                horizontal='right' if column == 5 else ('center' if column == 1 else 'left'),
+                horizontal='right' if column == 4 else ('center' if column == 1 else 'left'),
                 vertical='center',
-                wrap_text=column == 4,
+                wrap_text=column == 3,
             )
-        sheet.cell(row=row_number, column=5).number_format = '#,##0'
+        sheet.cell(row=row_number, column=4).number_format = '#,##0'
     total_row = header_row + len(rows) + 1
-    sheet.cell(row=total_row, column=4, value='Tổng số tiền giảng viên nhận')
-    sheet.cell(row=total_row, column=5, value=int(settlement.teacher_amount))
-    label_cell = sheet.cell(row=total_row, column=4)
-    value_cell = sheet.cell(row=total_row, column=5)
+    sheet.cell(row=total_row, column=3, value='Tổng số tiền giảng viên nhận')
+    sheet.cell(row=total_row, column=4, value=int(settlement.teacher_amount))
+    label_cell = sheet.cell(row=total_row, column=3)
+    value_cell = sheet.cell(row=total_row, column=4)
     label_cell.border = grid_border
     value_cell.border = grid_border
     label_cell.alignment = Alignment(horizontal='right', vertical='center')
     value_cell.alignment = Alignment(horizontal='right', vertical='center')
     value_cell.number_format = '#,##0'
-    for column, width in {'A': 8, 'B': 28, 'C': 18, 'D': 32, 'E': 24}.items():
+    for column, width in {'A': 8, 'B': 30, 'C': 32, 'D': 24}.items():
         sheet.column_dimensions[column].width = width
-    sheet.auto_filter.ref = f'A{header_row}:E{header_row + len(rows)}'
-    sheet.print_area = f'A1:E{total_row}'
+    sheet.auto_filter.ref = f'A{header_row}:D{header_row + len(rows)}'
+    sheet.print_area = f'A1:D{total_row}'
     sheet.print_title_rows = f'1:{header_row}'
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
@@ -2064,6 +2212,15 @@ def payment_period_list(request):
     periods = PaymentPeriod.objects.all().order_by('name')
     return render(request, 'lms_manager/payment_period_list.html', {'periods': periods})
 
+
+@require_POST
+def payment_period_delete_all(request):
+    count = PaymentPeriod.objects.count()
+    PaymentBatch.objects.all().delete()
+    PaymentPeriod.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} đợt đóng tiền và giao dịch liên quan.")
+    return redirect('payment_period_list')
+
 def payment_period_create(request):
     if request.method == 'POST':
         form = PaymentPeriodForm(request.POST)
@@ -2165,7 +2322,7 @@ def classroom_import_excel(request, pk):
                 
             # Locate the header row.  Downloadable templates may include a
             # title and short instructions above the column headers.
-            required = ['Tên', 'SĐT']
+            required = ['Tên']
             header_row_index = None
             header_map = None
             headers = []
@@ -2201,7 +2358,6 @@ def classroom_import_excel(request, pk):
                     continue
                     
                 name = row[header_map['Tên']].strip()
-                phone = row[header_map['SĐT']].strip()
                 if not name:
                     messages.warning(request, f"Dòng {row_idx}: Bị bỏ qua vì thiếu Tên.")
                     continue
@@ -2220,7 +2376,6 @@ def classroom_import_excel(request, pk):
 
                 student = Student.objects.create(
                     name=capitalized_name,
-                    phone=phone if phone else None,
                     classroom=row_classroom,
                     start_date=start_date_val
                 )

@@ -14,6 +14,7 @@
         <a href="{% url 'subject_add' %}" class="btn btn-primary rounded-3 px-3">
             <i class="fas fa-plus me-2"></i>Thêm Môn học
         </a>
+        {% if subjects %}<button type="button" class="btn btn-outline-danger rounded-3 px-3 ms-1" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'subject_delete_all' %}" data-delete-all-label="môn học và dữ liệu liên quan"><i class="fas fa-trash me-1"></i>Xóa tất cả</button>{% endif %}
     </div>
 </div>
 

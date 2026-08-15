@@ -3,11 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: django_lms_db
     environment:
-      - POSTGRES_DB=django_lms
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5435:5432"
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -24,14 +22,6 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      - DB_NAME=django_lms
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DEBUG=True
-      - SECRET_KEY=o!ld8nrt4vc*h1zoey*wj48x*q0#ss12h=+zh)kk^6b3aygg=!
     depends_on:
       - db
 

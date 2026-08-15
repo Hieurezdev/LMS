@@ -15,6 +15,7 @@
   <!-- Nav -->
   <div class="sidebar-nav mt-2" style="flex:1">
 
+    {% if request.user.is_admin %}
     <div class="sidebar-section-label">Tổng quan</div>
     <ul>
       <li class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
@@ -58,34 +59,64 @@
         </a>
       </li>
     </ul>
+    {% endif %}
 
     <div class="sidebar-section-label">Học phí</div>
     <ul>
+      {% if request.user.is_admin %}
       <li class="{% if request.resolver_match.url_name == 'payment_list' or request.resolver_match.url_name == 'payment_receipt' %}active{% endif %}">
         <a href="{% url 'payment_list' %}">
           <span class="nav-icon"><i class="fas fa-wallet"></i></span>
           <span>Giao dịch</span>
         </a>
       </li>
+      {% endif %}
       <li>
         <a href="{% url 'payment_add' %}">
           <span class="nav-icon"><i class="fas fa-plus-circle"></i></span>
           <span>Thu học phí</span>
         </a>
       </li>
+      {% if request.user.is_cashier %}
+      <li class="{% if request.resolver_match.url_name == 'cashier_due_list' %}active{% endif %}">
+        <a href="{% url 'cashier_due_list' %}">
+          <span class="nav-icon"><i class="fas fa-clock"></i></span>
+          <span>Học phí chưa đóng</span>
+        </a>
+      </li>
+      {% endif %}
     </ul>
 
   </div>
 
   <!-- Footer -->
   <div class="sidebar-footer">
-    <div class="user-info">
-      <div class="user-avatar">
-        {{ request.user.username|first|upper|default:"A" }}
-      </div>
-      <div>
-        <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
-        <div class="user-role">{{ request.user.get_user_role|default:"Quản trị viên" }}</div>
+    <div class="dropup sidebar-account-menu">
+      <button type="button" class="user-info" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mở tùy chọn tài khoản">
+        <div class="user-avatar">
+          {{ request.user.username|first|upper|default:"A" }}
+        </div>
+        <div class="user-identity">
+          <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
+          <div class="user-role">{{ request.user.get_user_role|default:"Quản trị viên" }}</div>
+        </div>
+        <i class="fas fa-chevron-up account-menu-chevron" aria-hidden="true"></i>
+      </button>
+      <div class="dropdown-menu sidebar-account-dropdown">
+        <div class="sidebar-account-heading">
+          <div class="fw-semibold text-white text-truncate">{{ request.user.get_full_name|default:request.user.username }}</div>
+          <div class="small text-truncate">{{ request.user.email|default:request.user.username }}</div>
+        </div>
+        {% if request.user.is_admin %}
+        <a class="dropdown-item" href="{% url 'admin_panel' %}"><i class="fas fa-user-shield"></i>Quản trị tài khoản</a>
+        {% endif %}
+        <a class="dropdown-item" href="{% url 'profile' %}"><i class="fas fa-user"></i>Hồ sơ cá nhân</a>
+        <a class="dropdown-item" href="{% url 'change_password' %}"><i class="fas fa-key"></i>Đổi mật khẩu</a>
+        <div class="dropdown-divider"></div>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="dropdown-item text-danger"><i class="fas fa-right-from-bracket"></i>Đăng xuất</button>
+        </form>
       </div>
     </div>
 

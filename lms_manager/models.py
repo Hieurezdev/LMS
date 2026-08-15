@@ -112,7 +112,6 @@ class Student(models.Model):
         ('Đã đóng', 'Đã đóng'),
     ]
     name = models.CharField(max_length=150, verbose_name="Tên học sinh")
-    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Số điện thoại")
     classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="students", null=True, blank=True, verbose_name="Lớp")
     start_date = models.DateField(blank=True, null=True, verbose_name="Ngày bắt đầu học")
     
@@ -245,6 +244,14 @@ class PaymentBatch(models.Model):
     payments = models.ManyToManyField(Payment, related_name='batches')
     payment_date = models.DateField(default=timezone.now, verbose_name="Ngày thu")
     created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='payment_batches',
+        verbose_name="Người tạo phiếu",
+    )
     receipt_pdf = models.FileField(upload_to="receipts/batches/", blank=True, null=True,
                                    verbose_name="Biên lai  PDF")
 

@@ -32,7 +32,7 @@
           <div id="batch-payment-list" class="d-flex flex-column gap-3"></div>
           <button type="button" id="add-payment-row" class="btn btn-outline-primary btn-sm rounded-3 mt-3"><i class="fas fa-plus me-1"></i> Thêm khoản thu</button>
           <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top payment-create-actions">
-            <a href="{% url 'payment_list' %}" class="btn btn-outline-secondary px-4 rounded-3"><i class="fas fa-arrow-left me-2"></i>Quay lại</a>
+            <a href="{% if request.user.is_cashier %}{% url 'cashier_due_list' %}{% else %}{% url 'payment_list' %}{% endif %}" class="btn btn-outline-secondary px-4 rounded-3"><i class="fas fa-arrow-left me-2"></i>Quay lại</a>
             <div class="text-end"><div class="text-secondary small">Tổng thu</div><div id="batch-total" class="fw-bold text-success fs-5">0 VNĐ</div></div>
             <button type="submit" class="btn btn-primary px-4 rounded-3"><i class="fas fa-save me-2"></i>Lưu và xuất biên lai tổng</button>
           </div>
@@ -167,6 +167,9 @@
 
     const popup = window.open('about:blank', '_blank');
     const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true;
+    const confirmButton = document.querySelector('#confirm-payment-submit');
+    confirmButton.disabled = true;
+    confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang lưu...';
     const data = new FormData(event.currentTarget); data.append('payment_date', date);
     data.append('payment_method', document.querySelector('#payment-method').value);
     try {
@@ -179,9 +182,13 @@
       }
       if (!result.success) throw new Error(result.error || 'Không thể lưu khoản thu.');
       if (popup) popup.location.href = result.receipt_url;
-      window.location.href = result.redirect_url;
+      paymentConfirmModal.hide();
+      window.location.assign(result.redirect_url);
     } catch (error) {
-      button.disabled = false; if (popup) popup.close(); alert(error.message || 'Không thể lưu khoản thu.');
+      button.disabled = false;
+      confirmButton.disabled = false;
+      confirmButton.innerHTML = '<i class="fas fa-save me-1"></i>Lưu và xuất biên lai';
+      if (popup) popup.close(); alert(error.message || 'Không thể lưu khoản thu.');
     }
   });
 </script>

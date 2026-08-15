@@ -50,6 +50,7 @@
       <a href="{% url 'student_add' %}" class="btn btn-primary">
         <i class="fas fa-user-plus"></i> Thêm học sinh
       </a>
+      {% if students %}<button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'student_delete_all' %}" data-delete-all-label="học sinh và dữ liệu liên quan"><i class="fas fa-trash"></i> Xóa tất cả</button>{% endif %}
     </div>
   </div>
 
@@ -118,7 +119,6 @@
           <tr>
             <th style="width: 50px;">STT</th>
             <th class="text-start">Học sinh</th>
-            <th class="text-start" style="width: 130px;">SĐT</th>
             <th class="text-start" style="width: 110px;">Lớp</th>
             <th style="width: 110px;">Bắt đầu</th>
             <th style="width: 90px;">Đợt 1</th>
@@ -141,7 +141,6 @@
                 {{ s.name }}
               </a>
             </td>
-            <td class="text-start text-secondary">{{ s.phone|default:"-" }}</td>
             <td class="text-start">
               {% if s.classroom %}
               <a href="{% url 'classroom_detail' s.classroom.id %}" style="text-decoration:none;">

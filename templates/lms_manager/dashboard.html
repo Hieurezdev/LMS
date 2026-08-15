@@ -4,80 +4,127 @@
 
 {% block title %}Dashboard | Quản lý Học sinh & Giảng viên{% endblock title %}
 
+{% block header %}
+<style>
+  .operations-dashboard { --ink:#14213D; --star:#4768F5; --teal:#087E72; --paper:#F6F8FC; --line:#E2E8F0; --sun:#F0B429; }
+  .operations-dashboard .dashboard-brief { background:linear-gradient(123deg,#14213D 0%,#1E3360 68%,#294A7B 100%); color:#fff; border-radius:20px; padding:28px 30px; box-shadow:0 18px 40px rgba(20,33,61,.17); position:relative; overflow:hidden; }
+  .operations-dashboard .dashboard-brief::after { content:""; position:absolute; width:220px; height:220px; border:1px solid rgba(255,255,255,.14); border-radius:50%; right:-76px; top:-88px; box-shadow:0 0 0 28px rgba(255,255,255,.035),0 0 0 56px rgba(255,255,255,.025); }
+  .dashboard-eyebrow { color:#AFC0FF; font-size:11px; letter-spacing:1.15px; font-weight:800; text-transform:uppercase; }
+  .dashboard-brief h1 { font-size:clamp(23px,3vw,32px); font-weight:750; letter-spacing:-.8px; margin:7px 0 8px; position:relative; z-index:1; }
+  .dashboard-brief-copy { max-width:580px; color:#D9E4FF; margin:0; font-size:13.5px; position:relative; z-index:1; }
+  .dashboard-brief-actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:20px; position:relative; z-index:1; }
+  .dashboard-brief-actions .btn { min-height:38px; font-weight:700; font-size:13px; }
+  .dashboard-collect-btn { background:#fff; color:#14213D !important; border-color:#fff; }
+  .dashboard-collect-btn:hover { background:#EAF0FF; border-color:#EAF0FF; }
+  .dashboard-outline-btn { color:#fff !important; border-color:rgba(255,255,255,.48); background:rgba(255,255,255,.08); }
+  .dashboard-outline-btn:hover { background:rgba(255,255,255,.18); border-color:#fff; }
+  .dashboard-day-panel { background:rgba(255,255,255,.11); border:1px solid rgba(255,255,255,.19); border-radius:14px; padding:16px; min-width:190px; position:relative; z-index:1; backdrop-filter:blur(4px); }
+  .dashboard-day-panel .day-label { color:#B9C9F1; font-weight:700; font-size:10px; letter-spacing:.9px; text-transform:uppercase; }
+  .dashboard-day-panel .day-date { font-size:20px; font-weight:750; margin:4px 0 11px; }
+  .dashboard-day-panel .day-revenue { border-top:1px solid rgba(255,255,255,.2); padding-top:10px; color:#DCE7FF; font-size:11px; }
+  .dashboard-day-panel .day-revenue strong { display:block; color:#fff; font-size:16px; margin-top:1px; }
+  .operations-dashboard .dashboard-stat-card { border:1px solid var(--line) !important; box-shadow:none !important; border-radius:14px !important; padding:16px !important; transition:transform .18s ease,box-shadow .18s ease; }
+  .operations-dashboard .dashboard-stat-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(20,33,61,.08) !important; }
+  .dashboard-stat-card .stat-kicker { color:#6B7890; font-size:10.5px; font-weight:800; letter-spacing:.7px; text-transform:uppercase; }
+  .dashboard-stat-card .stat-number { color:var(--ink); font-size:20px; font-weight:750; letter-spacing:-.45px; line-height:1.2; margin-top:4px; }
+  .dashboard-stat-card .stat-caption { color:#8090A8; font-size:11.5px; margin-top:4px; }
+  .dashboard-stat-icon { display:grid; place-items:center; width:36px; height:36px; border-radius:10px; flex-shrink:0; }
+  .dashboard-guidance { border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+  .dashboard-guidance-head { padding:16px 18px 12px; display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .dashboard-guidance-head h2 { font-size:15px; font-weight:750; color:var(--ink); margin:0; }
+  .dashboard-guidance-head p { color:#718096; font-size:12px; margin:0; }
+  .guide-action { display:flex; align-items:center; gap:12px; padding:14px 18px; border-top:1px solid #EEF2F7; text-decoration:none; transition:background .16s ease; }
+  .guide-action:hover { background:#F7F9FD; }
+  .guide-index { width:25px; height:25px; border-radius:50%; display:grid; place-items:center; color:#fff; background:var(--star); font-size:11px; font-weight:800; flex-shrink:0; }
+  .guide-action:nth-child(3) .guide-index { background:var(--teal); }
+  .guide-action:nth-child(4) .guide-index { background:#C48712; }
+  .guide-copy { min-width:0; flex:1; }
+  .guide-copy strong { display:block; color:#24324A; font-size:13px; }
+  .guide-copy span { display:block; color:#728096; font-size:11.5px; margin-top:1px; }
+  .guide-arrow { color:#9AA7BB; font-size:12px; }
+  .operations-dashboard .table-card, .operations-dashboard .card { border-color:var(--line); }
+  @media (max-width:767.98px) { .operations-dashboard .dashboard-brief { padding:22px 20px; } .dashboard-day-panel { margin-top:20px; min-width:0; } .dashboard-guidance-head { display:block; } .dashboard-guidance-head p { margin-top:4px; } }
+  @media (prefers-reduced-motion: reduce) { .operations-dashboard .dashboard-stat-card { transition:none; } }
+</style>
+{% endblock header %}
+
 {% block content %}
-<div class="container-fluid pt-3">
+<div class="container-fluid pt-3 operations-dashboard">
 {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
 
-<div class="row mt-2 mb-3">
-    <div class="col-12 col-md-8">
-        <h2 class="text-dark fw-bold mb-1">Hệ Thống Quản Lý Học Sinh & Giảng Viên</h2>
-        <p class="text-secondary small">Thống kê doanh thu, lớp học, môn học và giảng viên</p>
+<section class="dashboard-brief mb-3">
+  <div class="row align-items-center g-3">
+    <div class="col-12 col-md">
+      <div class="dashboard-eyebrow"><i class="fas fa-star me-1"></i>Trung tâm Sao Khuê · bàn điều hành</div>
+      <h1>Hôm nay cần xử lý gì?</h1>
+      <p class="dashboard-brief-copy">Thu học phí trước, xử lý các khoản đang nợ, rồi kiểm tra doanh thu. Mọi việc quan trọng được tập trung tại đây.</p>
+      <div class="dashboard-brief-actions">
+        <a href="{% url 'payment_add' %}" class="btn dashboard-collect-btn"><i class="fas fa-wallet me-1"></i>Thu học phí</a>
+        <a href="{% url 'debt_dashboard' %}" class="btn dashboard-outline-btn"><i class="fas fa-list-check me-1"></i>Xem công nợ</a>
+      </div>
     </div>
-</div>
+    <div class="col-12 col-md-auto">
+      <div class="dashboard-day-panel">
+        <div class="day-label">Hôm nay</div>
+        <div class="day-date">{{ today|date:"d/m/Y" }}</div>
+        <div class="day-revenue">Đã thu hôm nay<strong>{{ today_revenue|floatformat:0|intcomma }} VNĐ</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- Summary statistics -->
 <div class="row g-3 mb-4 dashboard-stat-grid">
     <div class="col-12 col-sm-6 col-xl">
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
             <div class="d-flex align-items-start">
-                <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 me-3"><i class="fas fa-wallet fa-lg"></i></div>
-                <div><h6 class="mb-1 text-secondary small">Tổng doanh thu</h6><h4 class="mb-0 fw-bold text-dark">{{ total_revenue|floatformat:0|intcomma }} <span class="small fs-6">VNĐ</span></h4></div>
+                <div class="dashboard-stat-icon me-3" style="background:#E8EDFF;color:#4768F5;"><i class="fas fa-chart-line"></i></div>
+                <div><div class="stat-kicker">Tổng doanh thu</div><div class="stat-number">{{ total_revenue|floatformat:0|intcomma }} VNĐ</div><div class="stat-caption">Từ tất cả giao dịch</div></div>
             </div>
         </div>
     </div>
     <div class="col-12 col-sm-6 col-xl">
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
             <div class="d-flex align-items-start">
-                <div class="p-2 bg-success bg-opacity-10 text-success rounded-3 me-3"><i class="fas fa-calendar-day fa-lg"></i></div>
-                <div><h6 class="mb-1 text-secondary small">Doanh thu hôm nay</h6><h4 class="mb-0 fw-bold text-dark">{{ today_revenue|floatformat:0|intcomma }} <span class="small fs-6">VNĐ</span></h4><span class="small text-secondary">{{ today|date:"d/m/Y" }}</span></div>
+                <div class="dashboard-stat-icon me-3" style="background:#E3F6F3;color:#087E72;"><i class="fas fa-calendar-day"></i></div>
+                <div><div class="stat-kicker">Đã thu hôm nay</div><div class="stat-number">{{ today_revenue|floatformat:0|intcomma }} VNĐ</div><div class="stat-caption">{{ today|date:"d/m/Y" }}</div></div>
             </div>
         </div>
     </div>
     <div class="col-12 col-sm-6 col-xl">
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
             <div class="d-flex align-items-start">
-                <div class="p-2 bg-info bg-opacity-10 text-info rounded-3 me-3"><i class="fas fa-user-graduate fa-lg"></i></div>
-                <div><h6 class="mb-1 text-secondary small">Học sinh</h6><h4 class="mb-0 fw-bold text-dark">{{ student_count }}</h4></div>
+                <div class="dashboard-stat-icon me-3" style="background:#E8F3FB;color:#1676B9;"><i class="fas fa-user-graduate"></i></div>
+                <div><div class="stat-kicker">Học sinh</div><div class="stat-number">{{ student_count }}</div><div class="stat-caption">Đang quản lý</div></div>
             </div>
         </div>
     </div>
     <div class="col-12 col-sm-6 col-xl">
         <div class="card border-0 shadow-sm rounded-4 p-3 h-100 dashboard-stat-card">
             <div class="d-flex align-items-start">
-                <div class="p-2 bg-dark bg-opacity-10 rounded-3 me-3"><i class="fas fa-chalkboard-teacher fa-lg"></i></div>
-                <div><h6 class="mb-1 text-secondary small">Giảng viên</h6><h4 class="mb-0 fw-bold text-dark">{{ teacher_count }}</h4></div>
+                <div class="dashboard-stat-icon me-3" style="background:#FFF4DE;color:#BD7B0E;"><i class="fas fa-chalkboard-teacher"></i></div>
+                <div><div class="stat-kicker">Giảng viên</div><div class="stat-number">{{ teacher_count }}</div><div class="stat-caption">Đang phụ trách lớp</div></div>
             </div>
         </div>
     </div>
     <div class="col-12 col-sm-6 col-xl">
         <div class="card border-0 shadow-sm rounded-4 p-3 bg-light text-dark h-100 dashboard-stat-card">
             <div class="d-flex align-items-start">
-                <div class="p-2 bg-primary bg-opacity-10 text-primary rounded-3 me-3"><i class="fas fa-school fa-lg"></i></div>
-                <div><h6 class="mb-1 text-secondary small">Lớp / Môn học</h6><h4 class="mb-0 fw-bold">{{ class_count }} / {{ subject_count }}</h4></div>
+                <div class="dashboard-stat-icon me-3" style="background:#F0EFFB;color:#6E55B7;"><i class="fas fa-school"></i></div>
+                <div><div class="stat-kicker">Lớp / Môn học</div><div class="stat-number">{{ class_count }} / {{ subject_count }}</div><div class="stat-caption">Cấu trúc đào tạo</div></div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Quick Shortcuts -->
+<!-- Guided quick actions -->
 <div class="row g-3 mb-4">
     <div class="col-12">
-        <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-            <div class="d-flex align-items-center flex-wrap gap-2">
-                <span class="fw-bold text-secondary me-2"><i class="fas fa-bolt text-warning me-1"></i>Thao tác nhanh:</span>
-                <a href="{% url 'student_add' %}" class="btn btn-outline-success rounded-3 btn-sm px-3">
-                    <i class="fas fa-plus me-1"></i> Thêm Học sinh
-                </a>
-                <a href="{% url 'subject_add' %}" class="btn btn-outline-info rounded-3 btn-sm px-3">
-                    <i class="fas fa-plus me-1"></i> Thêm Môn học
-                </a>
-                <a href="{% url 'teacher_add' %}" class="btn btn-outline-warning text-dark rounded-3 btn-sm px-3">
-                    <i class="fas fa-plus me-1"></i> Thêm Giảng viên
-                </a>
-                <a href="{% url 'payment_add' %}" class="btn btn-success rounded-3 btn-sm px-3">
-                    <i class="fas fa-wallet me-1"></i> Đóng học phí
-                </a>
-            </div>
+        <div class="dashboard-guidance">
+          <div class="dashboard-guidance-head"><h2><i class="fas fa-compass text-primary me-1"></i>Bắt đầu từ đây</h2><p>Ba thao tác thường dùng nhất để vận hành trong ngày.</p></div>
+          <a href="{% url 'payment_add' %}" class="guide-action"><span class="guide-index">1</span><span class="guide-copy"><strong>Ghi nhận học phí</strong><span>Chọn học sinh, đợt đóng và hình thức thanh toán.</span></span><i class="fas fa-arrow-right guide-arrow"></i></a>
+          <a href="{% url 'debt_dashboard' %}" class="guide-action"><span class="guide-index">2</span><span class="guide-copy"><strong>Kiểm tra khoản cần thu</strong><span>{{ debt_total_count }} khoản chưa thu — lọc theo lớp, giảng viên hoặc đợt.</span></span><i class="fas fa-arrow-right guide-arrow"></i></a>
+          <a href="{% url 'daily_revenue_report' %}" class="guide-action"><span class="guide-index">3</span><span class="guide-copy"><strong>Đối chiếu doanh thu</strong><span>Tra cứu tổng tiền theo từng ngày thu bất kỳ.</span></span><i class="fas fa-arrow-right guide-arrow"></i></a>
         </div>
     </div>
 </div>
@@ -95,6 +142,39 @@
         </div>
     </div>
 {% endif %}
+
+<!-- Account approval queue -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="px-3 py-3 d-flex justify-content-between align-items-center border-bottom bg-light">
+                <h6 class="fw-bold text-dark mb-0"><i class="fas fa-user-clock text-primary me-2"></i>Tài khoản chờ duyệt</h6>
+                <span class="badge {% if pending_cashier_accounts %}bg-warning text-dark{% else %}bg-success{% endif %}">{{ pending_cashier_accounts|length }}</span>
+            </div>
+            {% if pending_cashier_accounts %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light"><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>SĐT</th><th>Ngày đăng ký</th><th class="text-end">Thao tác</th></tr></thead>
+                    <tbody>{% for account in pending_cashier_accounts %}
+                        <tr>
+                            <td class="fw-semibold">{{ account.username }}</td>
+                            <td>{{ account.get_full_name }}</td>
+                            <td>{{ account.phone|default:'-' }}</td>
+                            <td>{{ account.date_joined|date:'d/m/Y H:i' }}</td>
+                            <td class="text-end">
+                                <form method="post" action="{% url 'approve_cashier_account' account.id %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-success">Duyệt</button></form>
+                                <form method="post" action="{% url 'reject_cashier_account' account.id %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Từ chối</button></form>
+                            </td>
+                        </tr>
+                    {% endfor %}</tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="p-3 text-secondary small">Không có tài khoản nào đang chờ duyệt.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
 
 <!-- Onboarding Wizard (chỉ hiện khi chưa hoàn thành) -->
 {% if not setup_all_done %}
@@ -234,7 +314,7 @@
         <div class="card border-0 shadow-sm rounded-4 p-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h6 class="fw-bold text-dark mb-0"><i class="fas fa-calendar-alt text-success me-2"></i>Doanh thu theo ngày</h6>
-                <span class="text-secondary small">14 ngày thu gần nhất</span>
+                <a href="{% url 'daily_revenue_report' %}" class="btn btn-sm btn-outline-primary">Tra cứu tất cả ngày</a>
             </div>
             <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
                 <table class="table table-sm table-hover align-middle mb-0">

@@ -5,12 +5,14 @@ from django.conf.urls.static import static
 from django.views import defaults as default_views
 from django.conf.urls.i18n import i18n_patterns
 from django.views.i18n import JavaScriptCatalog
+from lms_manager import views as lms_views
 
 admin.site.site_header = "Dj-LMS Admin"
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("i18n/", include("django.conf.urls.i18n")),
+    path("media/receipts/<path:receipt_path>", lms_views.protected_receipt_file, name="protected_receipt_file"),
 ]
 
 urlpatterns += i18n_patterns(

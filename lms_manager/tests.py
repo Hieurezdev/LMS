@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.messages import get_messages
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import translation
 from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, TeacherSettlement
@@ -14,6 +15,10 @@ from lms_manager.views import assign_teacher_to_classroom
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
 class LMSManagerQueryTest(TestCase):
     def setUp(self):
+        self.admin_user = get_user_model().objects.create_superuser(
+            username='admin-test', password='safe-test-password'
+        )
+        self.client.force_login(self.admin_user)
         self.classroom = ClassRoom.objects.create(name="10A1")
         self.subject = Subject.objects.create(name="Math")
         self.teacher = Teacher.objects.create(name="Mr. Smith")
@@ -62,6 +67,28 @@ class LMSManagerQueryTest(TestCase):
         
         self.assertEqual(unpaid.count(), 1)
         self.assertEqual(unpaid.first().student, self.student2)
+
+    def test_cashier_can_collect_and_view_unpaid_but_cannot_access_admin_lists(self):
+        cashier = get_user_model().objects.create_user(
+            username='cashier-test', password='safe-test-password'
+        )
+        self.client.force_login(cashier)
+        with translation.override('en'):
+            self.assertEqual(self.client.get(reverse('payment_add')).status_code, 200)
+            self.assertEqual(self.client.get(reverse('cashier_due_list')).status_code, 200)
+            self.assertEqual(self.client.get(reverse('payment_list')).status_code, 403)
+            self.assertEqual(self.client.get(reverse('home')).status_code, 403)
+            self.assertEqual(self.client.get(reverse('classroom_list')).status_code, 403)
+            self.assertEqual(self.client.get(reverse('teacher_list')).status_code, 403)
+
+    def test_daily_revenue_report_can_search_persisted_payment_dates(self):
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('daily_revenue_report'),
+                {'start': str(self.payment.payment_date), 'end': str(self.payment.payment_date)},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '100,000')
 
     def test_teacher_list_searches_by_name_and_phone(self):
         other_teacher = Teacher.objects.create(name='Ms. Jones', phone='0988111222')
@@ -165,7 +192,7 @@ class LMSManagerQueryTest(TestCase):
     def test_excel_import_uses_the_selected_classroom_and_teacher(self):
         upload = SimpleUploadedFile(
             'students.csv',
-            'Tên,SĐT\nNguyen Van C,0900000000\n'.encode('utf-8'),
+            'Tên\nNguyen Van C\n'.encode('utf-8'),
             content_type='text/csv',
         )
         with translation.override('en'):
@@ -332,7 +359,7 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN ĐỢT 1, 2 - Thầy Mr. Smith')
         self.assertEqual(worksheet['B4'].value, 2)
         self.assertEqual(worksheet['B5'].value, 0)
-        self.assertEqual(worksheet['E10'].value, 200000)
+        self.assertEqual(worksheet['D10'].value, 200000)
         self.assertNotIn('Tổng doanh thu', [cell.value for row in worksheet.iter_rows() for cell in row])
         self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
         self.assertEqual(worksheet.page_setup.orientation, worksheet.ORIENTATION_LANDSCAPE)

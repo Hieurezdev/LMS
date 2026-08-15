@@ -173,7 +173,6 @@
                         <tr>
                             <th style="width: 50px;">STT</th>
                             <th class="text-start">Tên học sinh</th>
-                            <th class="text-start" style="width: 130px;">Số điện thoại</th>
                             <th style="width: 110px;">Bắt đầu</th>
                             <th style="width: 100px;">Đợt 1</th>
                             <th style="width: 100px;">Đợt 2</th>
@@ -203,7 +202,6 @@
                                     {{ s.name }}
                                 </a>
                             </td>
-                            <td class="text-start" style="color:#64748B;">{{ s.phone|default:"-" }}</td>
                             <td class="text-center text-secondary">
                               {% if s.start_date %}{{ s.start_date|date:"d/m/Y" }}{% else %}-{% endif %}
                             </td>

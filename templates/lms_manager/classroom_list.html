@@ -27,18 +27,24 @@
     .classroom-list-table .btn-xs { min-width: 28px; padding-left: 6px !important; padding-right: 6px !important; }
 
     @media (max-width: 575.98px) {
-        .classroom-list-scroll { max-height: 58vh; }
-        .classroom-list-table { font-size: 10px !important; }
-        .classroom-list-table th, .classroom-list-table td { padding: 7px 3px !important; }
-        .classroom-list-table th { font-size: 8px !important; }
-        .classroom-list-table .classroom-id { width: 5%; }
-        .classroom-list-table .classroom-name { width: 15%; }
-        .classroom-list-table .classroom-teacher { width: 23%; }
-        .classroom-list-table .classroom-count { width: 11%; }
-        .classroom-list-table .classroom-subjects { width: 9%; }
+        .classroom-list-scroll { max-height: 58vh; overflow-x: hidden; }
+        .table-card-header:has(.classroom-list-toolbar) { flex-direction: column; align-items: stretch !important; }
+        .classroom-list-toolbar { width: 100%; display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .classroom-list-toolbar .btn { width: 100%; justify-content: center; white-space: nowrap; }
+        .classroom-list-table { font-size: 11px !important; }
+        .classroom-list-table th, .classroom-list-table td { padding: 9px 5px !important; }
+        .classroom-list-table th { font-size: 9px !important; letter-spacing: 0; }
+        .classroom-list-table .classroom-id,
+        .classroom-list-table .classroom-subjects { display: none; }
+        .classroom-list-table .classroom-name { width: 24%; }
+        .classroom-list-table .classroom-teacher { width: 25%; }
+        .classroom-list-table .classroom-count { width: 14%; }
         .classroom-list-table .classroom-revenue { width: 24%; }
         .classroom-list-table .classroom-actions { width: 13%; }
-        .classroom-list-table .btn-xs { min-width: 24px; font-size: 9px; }
+        .classroom-list-table .classroom-teacher,
+        .classroom-list-table .classroom-revenue { overflow-wrap: normal; word-break: normal; }
+        .classroom-list-table .classroom-actions .d-flex { flex-direction: column; align-items: center; gap: 4px !important; }
+        .classroom-list-table .btn-xs { min-width: 28px; min-height: 28px; padding: 4px 6px !important; font-size: 10px; }
     }
 </style>
 {% endblock header %}
@@ -70,9 +76,12 @@
 <div class="table-card mb-5">
     <div class="table-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div class="table-card-title"><i class="fas fa-school"></i>Danh sách lớp học</div>
-        <a href="{% url 'classroom_list_export' %}" class="btn btn-sm btn-outline-success rounded-3">
-            <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
-        </a>
+        <div class="classroom-list-toolbar d-flex flex-wrap gap-2">
+            <a href="{% url 'classroom_list_export' %}" class="btn btn-sm btn-outline-success rounded-3">
+                <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
+            </a>
+            {% if class_reports %}<button type="button" class="btn btn-sm btn-outline-danger rounded-3" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'classroom_delete_all' %}" data-delete-all-label="lớp học và dữ liệu liên quan"><i class="fas fa-trash me-1"></i>Xóa tất cả</button>{% endif %}
+        </div>
     </div>
     
     <div class="table-responsive classroom-list-scroll">
@@ -91,7 +100,7 @@
             <tbody>
                 {% for item in class_reports %}
                     <tr>
-                        <td class="text-center text-secondary fw-semibold">{{ item.classroom.id }}</td>
+                        <td class="text-center text-secondary fw-semibold classroom-id">{{ item.classroom.id }}</td>
                         <td class="fw-semibold text-dark">
                             <a href="{% url 'classroom_detail' item.classroom.id %}" class="text-decoration-none text-primary">
                                 <i class="fas fa-school me-2 text-secondary"></i>{{ item.classroom.name }}
@@ -99,11 +108,11 @@
                         </td>
                         <td class="text-secondary fw-semibold">{{ item.teachers_names|default:"-" }}</td>
                         <td class="text-center">{{ item.student_count }} học sinh</td>
-                        <td class="text-center">{{ item.subject_count }} môn</td>
+                        <td class="text-center classroom-subjects">{{ item.subject_count }} môn</td>
                         <td class="text-end fw-bold text-success">
                             {{ item.revenue|floatformat:0|intcomma }} VNĐ
                         </td>
-                        <td class="text-center no-export">
+                        <td class="text-center no-export classroom-actions">
                             <div class="d-flex justify-content-center gap-1">
                                 <a href="{% url 'classroom_edit' item.classroom.id %}" class="btn btn-xs btn-outline-primary rounded-3 py-0.5 px-2" title="Sửa">
                                     <i class="fas fa-edit"></i>

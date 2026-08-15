@@ -67,7 +67,7 @@
         <div class="small text-secondary"> theo từng học sinh trong các đợt đã chọn.</div>
       </div>
       {% if payment_count %}
-      <form method="post" id="settlement-confirm-form">
+      <form method="post" id="settlement-confirm-form" class="js-confirm-action">
         {% csrf_token %}
         {% for period_number in selected_period_numbers %}<input type="hidden" name="period" value="{{ period_number }}">{% endfor %}
         <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#settlement-confirm-modal">
@@ -83,7 +83,6 @@
           <tr>
             <th class="text-center" style="width:70px;">STT</th>
             <th>Học sinh</th>
-            <th style="width:145px;">SĐT</th>
             {% for period in period_options %}
             <th class="text-center" style="min-width:125px;">{{ period.name }}</th>
             {% endfor %}
@@ -95,7 +94,6 @@
           <tr>
             <td class="text-center">{{ forloop.counter }}</td>
             <td class="fw-semibold">{{ row.student_name }}</td>
-            <td>{{ row.phone|default:'-' }}</td>
             {% for state in row.period_states %}
             <td class="text-center">
               {% if state.status == 'unsettled' %}

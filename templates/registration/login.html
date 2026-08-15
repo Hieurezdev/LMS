@@ -11,6 +11,11 @@
       {% trans 'Sign in' %}
     </div>
     <div class="card-body">
+        {% if messages %}
+          {% for message in messages %}
+          <div class="alert alert-{{ message.tags|default:'info' }} py-2 small">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
         <form action="" method="POST" id="login-form">{% csrf_token %}
           <div class="form-group mb-3">
               <label class="mb-2" for="username_id"><i class="fas fa-address-card me-2"></i>{% trans 'ID Number' %}</label>

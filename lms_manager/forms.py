@@ -63,14 +63,13 @@ class StudentForm(forms.ModelForm):
 
     class Meta:
         model = Student
-        fields = ['name', 'phone', 'classroom', 'start_date']
+        fields = ['name', 'classroom', 'start_date']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Tên học sinh'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Số điện thoại (tùy chọn)'}),
             'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
         }
 
-    field_order = ['name', 'phone', 'start_date', 'teacher', 'subject', 'classroom']
+    field_order = ['name', 'start_date', 'teacher', 'subject', 'classroom']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -3,10 +3,26 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.views import LoginView
 from django.contrib.auth.forms import PasswordChangeForm
 from .decorators import admin_required
-from .forms import ProfileUpdateForm
+from .forms import AdminCashierCreateForm, ApprovalAuthenticationForm, ProfileUpdateForm
 from .models import User
+
+
+class RoleLoginView(LoginView):
+    template_name = "registration/login.html"
+    authentication_form = ApprovalAuthenticationForm
+
+    def get_success_url(self):
+        if self.request.user.is_cashier:
+            return redirect("cashier_due_list").url
+        return super().get_success_url()
+
+
+def register(request):
+    messages.info(request, "Tài khoản Thu ngân do Quản trị viên cấp.")
+    return redirect("login")
 
 
 def validate_username(request):
@@ -48,8 +64,39 @@ def profile_single(request, id):
 @admin_required
 def admin_panel(request):
     return render(
-        request, "setting/admin_panel.html", {"title": request.user.get_full_name}
+        request,
+        "setting/admin_panel.html",
+        {
+            "title": request.user.get_full_name,
+            "pending_accounts": User.objects.filter(
+                role=User.ROLE_CASHIER,
+                is_approved=False,
+                is_active=True,
+                is_superuser=False,
+            ).order_by("date_joined"),
+            "cashier_count": User.objects.filter(
+                role=User.ROLE_CASHIER,
+                is_approved=True,
+                is_active=True,
+            ).count(),
+            "admin_count": User.objects.filter(is_superuser=True, is_active=True).count(),
+            "cashier_form": AdminCashierCreateForm(),
+        },
     )
+
+
+@login_required
+@admin_required
+def create_cashier_account(request):
+    if request.method != "POST":
+        return redirect("admin_panel")
+    form = AdminCashierCreateForm(request.POST)
+    if form.is_valid():
+        user = form.save()
+        messages.success(request, f"Đã cấp tài khoản Thu ngân: {user.username}.")
+    else:
+        messages.error(request, "Không thể tạo tài khoản. Hãy kiểm tra lại tên đăng nhập và mật khẩu.")
+    return redirect("admin_panel")
 
 
 @login_required

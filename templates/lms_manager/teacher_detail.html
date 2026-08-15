@@ -212,11 +212,6 @@
                       <a href="{% url 'student_detail' s.id %}" class="fw-semibold text-dark text-decoration-none d-block">
                         {{ s.name }}
                       </a>
-                      {% if s.phone %}
-                      <div style="font-size:11px;color:#64748B;margin-top:2px;">
-                        <i class="fas fa-phone-alt" style="font-size:9.5px;color:#94A3B8;margin-right:2px;"></i> {{ s.phone }}
-                      </div>
-                      {% endif %}
                     </td>
                     <td class="text-start text-secondary fw-semibold">{{ s.enrolled_subject }}</td>
                     <td class="text-center text-secondary">

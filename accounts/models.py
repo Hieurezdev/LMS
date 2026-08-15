@@ -38,6 +38,15 @@ GENDERS = ((_("M"), _("Male")), (_("F"), _("Female")))
 
 
 class User(AbstractUser):
+    ROLE_ADMIN = "admin"
+    ROLE_CASHIER = "cashier"
+    ROLE_CHOICES = (
+        (ROLE_ADMIN, "Quản trị viên"),
+        (ROLE_CASHIER, "Thu ngân"),
+    )
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_CASHIER)
+    is_approved = models.BooleanField(default=False, verbose_name="Đã được duyệt")
     is_student = models.BooleanField(default=False)
     is_lecturer = models.BooleanField(default=False)
     is_parent = models.BooleanField(default=False)
@@ -69,8 +78,10 @@ class User(AbstractUser):
 
     @property
     def get_user_role(self):
-        if self.is_superuser:
-            role = _("Admin")
+        if self.is_admin:
+            role = _("Quản trị viên")
+        elif self.role == self.ROLE_CASHIER:
+            role = _("Thu ngân")
         elif self.is_student:
             role = _("Student")
         elif self.is_lecturer:
@@ -81,6 +92,14 @@ class User(AbstractUser):
             role = _("User")
 
         return role
+
+    @property
+    def is_admin(self):
+        return self.is_superuser or self.role == self.ROLE_ADMIN
+
+    @property
+    def is_cashier(self):
+        return self.role == self.ROLE_CASHIER and not self.is_admin
 
     def get_picture(self):
         try:

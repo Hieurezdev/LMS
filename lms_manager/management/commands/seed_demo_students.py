@@ -74,7 +74,6 @@ class Command(BaseCommand):
             )
             student = Student.objects.create(
                 name=name,
-                phone=f'090{number:07d}',
                 classroom=classroom,
                 start_date=today - timedelta(days=randomizer.randint(30, 250)),
             )

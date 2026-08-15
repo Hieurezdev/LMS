@@ -19,7 +19,7 @@
     <link rel="stylesheet" type="text/css" href="{% static 'vendor/bootstrap-5.3.2/css/bootstrap.min.css' %}">
 
     <link rel="stylesheet" type="text/css" href="{% static 'css/style.min.css' %}">
-    <link rel="stylesheet" type="text/css" href="{% static 'css/lms.css' %}?v=teacher-add-class-20260727">
+    <link rel="stylesheet" type="text/css" href="{% static 'css/lms.css' %}?v=liquid-glass-contrast-20260815">
 
     <!-- Google Font: Inter (optimized for Vietnamese) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,11 +61,53 @@
 
     </div>
     {% endblock %}
+
+    {% if request.user.is_admin %}
+    <div class="modal fade" id="delete-all-modal" tabindex="-1" aria-labelledby="delete-all-modal-title" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title" id="delete-all-modal-title"><i class="fas fa-triangle-exclamation me-2"></i>Xác nhận xóa tất cả</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Đóng"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-0" id="delete-all-modal-message">Bạn có chắc chắn muốn xóa toàn bộ dữ liệu này không?</p>
+            <p class="text-danger small mt-2 mb-0">Thao tác này không thể hoàn tác.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+            <form id="delete-all-form" method="post" class="d-inline js-confirm-action">{% csrf_token %}<button type="submit" class="btn btn-danger">Xóa tất cả</button></form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
     <script src="{% url 'javascript-catalog' %}"></script>
     <script type="text/javascript" src="{% static 'vendor/jquery-3.7.1/jquery-3.7.1.min.js' %}"></script>
     <script type="text/javascript" src="{% static 'vendor/bootstrap-5.3.2/js/bootstrap.bundle.min.js' %}"></script>
 
     <script type="text/javascript" src="{% static 'js/main.js' %}?v=mobile-sidebar-20260727"></script>
+    {% if request.user.is_admin %}
+    <script>
+      document.getElementById('delete-all-modal')?.addEventListener('show.bs.modal', function (event) {
+        const trigger = event.relatedTarget;
+        document.getElementById('delete-all-form').action = trigger.dataset.deleteAllUrl;
+        document.getElementById('delete-all-modal-message').textContent = `Bạn có chắc chắn muốn xóa tất cả ${trigger.dataset.deleteAllLabel}?`;
+      });
+
+      document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!form.classList.contains('js-confirm-action')) return;
+
+        const submitButton = event.submitter || form.querySelector('button[type="submit"]');
+        if (!submitButton || submitButton.dataset.loading === 'true') return;
+
+        submitButton.dataset.loading = 'true';
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang xử lý...';
+      });
+    </script>
+    {% endif %}
 
     {% block js %}
     {% endblock js %}

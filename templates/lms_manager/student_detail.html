@@ -30,10 +30,6 @@
           {% else %}
           <span style="color:#64748B;font-weight:600;">Không có lớp</span>
           {% endif %}
-          {% if student.phone %}
-          &nbsp;·&nbsp;
-          <span style="color:#64748B;font-weight:500;"><i class="fas fa-phone-alt" style="font-size:11px;color:#64748B;"></i> {{ student.phone }}</span>
-          {% endif %}
           {% if total_paid > 0 %}
           &nbsp;·&nbsp;
           <span style="color:#22C55E;font-weight:600;">Đã nộp {{ total_paid|floatformat:0|intcomma }} VNĐ</span>
@@ -145,7 +141,7 @@
                   {% if r.status == "Đã đóng" %}
                     <div class="d-flex justify-content-end gap-1">
                       {% if r.payment.receipt_pdf %}
-                      <a href="{{ r.payment.receipt_pdf.url }}" class="btn btn-outline-success btn-xs" target="_blank" title="Tải PDF biên lai">
+                      <a href="{% url 'payment_receipt' r.payment_id %}" class="btn btn-outline-success btn-xs" target="_blank" title="Tải PDF biên lai">
                         <i class="fas fa-file-pdf"></i>
                       </a>
                       {% endif %}

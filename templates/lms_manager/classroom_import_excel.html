@@ -29,7 +29,6 @@
                     <li class="mb-2">File tải lên cần chứa các cột bắt buộc sau (tiêu đề cột không phân biệt hoa thường, thứ tự cột có thể thay đổi tùy ý):
                         <ul>
                             <li>**Tên**: Họ và tên học sinh (bắt buộc)</li>
-                            <li>**SĐT**: Số điện thoại liên hệ (bắt buộc)</li>
                             <li>**Lớp**: Cột này không bắt buộc. Nếu có trong file, hệ thống vẫn bỏ qua và tự gán tất cả học sinh vào lớp <strong>{{ classroom.name }}</strong>.</li>
                             <li>**Ngày nhập học**: Ngày bắt đầu học của học sinh (tùy chọn, có thể ghi là *Ngày bắt đầu*, định dạng ngày tháng như `15/07/2026` hoặc `2026-07-15`)</li>
                             <li>**STT** (Số thứ tự): Cột này **không bắt buộc**. Sau khi nhập vào, hệ thống sẽ tự động hiển thị số thứ tự (STT) của học sinh.</li>
@@ -43,7 +42,6 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Tên</th>
-                                <th>SĐT</th>
                                 <th>Lớp</th>
                                 <th>Ngày nhập học</th>
                             </tr>
@@ -51,13 +49,11 @@
                         <tbody>
                             <tr>
                                 <td>Nguyễn Văn A</td>
-                                <td>0912345678</td>
                                 <td>{{ classroom.name }}</td>
                                 <td>15/07/2026</td>
                             </tr>
                             <tr>
                                 <td>Trần Thị B</td>
-                                <td>0987654321</td>
                                 <td>{{ classroom.name }}</td>
                                 <td></td>
                             </tr>

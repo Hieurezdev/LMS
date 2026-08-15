@@ -15,6 +15,7 @@
       <a href="{% url 'teacher_add' %}" class="btn btn-primary">
         <i class="fas fa-plus"></i> Thêm giảng viên
       </a>
+      {% if teachers %}<button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'teacher_delete_all' %}" data-delete-all-label="giảng viên và dữ liệu liên quan"><i class="fas fa-trash"></i> Xóa tất cả</button>{% endif %}
     </div>
   </div>
 
@@ -139,7 +140,7 @@
       </div>
       <div class="modal-footer border-top">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
-        <form method="post" id="teacher-delete-form">
+        <form method="post" id="teacher-delete-form" class="js-confirm-action">
           {% csrf_token %}
           <button type="submit" class="btn btn-danger"><i class="fas fa-trash me-1"></i>Xóa giảng viên</button>
         </form>

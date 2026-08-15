@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Tra cứu doanh thu theo ngày{% endblock %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Tra cứu doanh thu theo ngày</h1>
+      <p>Tổng thu được lưu từ các giao dịch học phí đã ghi nhận.</p>
+    </div>
+    <div class="page-header-actions"><a href="{% url 'home' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Dashboard</a></div>
+  </div>
+
+  <div class="card p-3 mb-4">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-4"><label class="form-label">Từ ngày</label><input class="form-control" type="date" name="start" value="{{ start }}"></div>
+      <div class="col-12 col-md-4"><label class="form-label">Đến ngày</label><input class="form-control" type="date" name="end" value="{{ end }}"></div>
+      <div class="col-12 col-md-4 d-flex gap-2"><button class="btn btn-primary" type="submit"><i class="fas fa-search"></i> Tra cứu</button><a class="btn btn-outline-secondary" href="{% url 'daily_revenue_report' %}">Xóa lọc</a></div>
+    </form>
+  </div>
+
+  <div class="table-card">
+    <div class="table-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="table-card-title"><i class="fas fa-calendar-day"></i>Sổ doanh thu theo ngày</div>
+      <span class="fw-bold text-success">Tổng: {{ total_revenue|floatformat:0|intcomma }} VNĐ</span>
+    </div>
+    <div class="table-responsive" style="max-height:65vh;overflow-y:auto;">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Ngày thu</th><th class="text-center">Số khoản thu</th><th class="text-end">Tổng doanh thu</th></tr></thead>
+        <tbody>{% for item in revenue_by_day %}
+          <tr><td class="fw-semibold">{{ item.payment_date|date:'d/m/Y' }}</td><td class="text-center">{{ item.payment_count }}</td><td class="text-end fw-bold text-success">{{ item.total|floatformat:0|intcomma }} VNĐ</td></tr>
+        {% empty %}<tr><td colspan="3" class="text-center text-secondary py-4">Không có doanh thu trong khoảng ngày đã chọn.</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

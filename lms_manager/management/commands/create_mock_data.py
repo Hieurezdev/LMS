@@ -46,7 +46,6 @@ class Command(BaseCommand):
         # Student 1: Started 3 months ago, has paid 2 periods (Period 1, 2), has unpaid Period 3 (past due), not in debt >= 2 periods
         stu1 = Student.objects.create(
             name="Phạm Minh Đức",
-            phone="0911111111",
             classroom=c1,
             start_date=today - datetime.timedelta(days=95),
             dot_1="Đã đóng",
@@ -57,7 +56,6 @@ class Command(BaseCommand):
         # Student 1 Duplicate: Same student, but studying with Teacher Binh in her 11B1 class
         stu1_dup = Student.objects.create(
             name="Phạm Minh Đức",
-            phone="0911111111",
             classroom=c2,
             start_date=today - datetime.timedelta(days=95),
             dot_1="Chưa đóng",
@@ -68,7 +66,6 @@ class Command(BaseCommand):
         # Student 2: Started 3 months ago, unpaid Period 1, 2, 3 -> In debt for 3 periods! (Should show on dashboard)
         stu2 = Student.objects.create(
             name="Đỗ Thu Hà",
-            phone="0922222222",
             classroom=c2,
             start_date=today - datetime.timedelta(days=95),
             dot_1="Chưa đóng",
@@ -79,7 +76,6 @@ class Command(BaseCommand):
         # Student 3: Started 2 months ago, unpaid Period 1, 2 -> In debt for 2 periods! (Should show on dashboard)
         stu3 = Student.objects.create(
             name="Trịnh Quốc Bảo",
-            phone="0933333333",
             classroom=c2,
             start_date=today - datetime.timedelta(days=65),
             dot_1="Chưa đóng",
@@ -89,7 +85,6 @@ class Command(BaseCommand):
         # Student 4: Started 15 days ago, unpaid Period 1 -> Not overdue yet (deadline is 1 month from start date)
         stu4 = Student.objects.create(
             name="Lê Minh Khôi",
-            phone="0944444444",
             classroom=c3,
             start_date=today - datetime.timedelta(days=15),
             dot_1="Chưa đóng"
@@ -98,7 +93,6 @@ class Command(BaseCommand):
         # Student 5: Started today, all periods unpaid -> Not overdue yet
         stu5 = Student.objects.create(
             name="Nguyễn Thảo Nguyên",
-            phone="0955555555",
             classroom=c1,
             start_date=today,
             dot_1="Chưa đóng"

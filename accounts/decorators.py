@@ -12,9 +12,10 @@ def admin_required(
     redirects to the specified URL if necessary.
     """
 
-    # Define the test function: checks if the user is active and a superuser
+    # Both Django superusers and accounts explicitly assigned the Admin role
+    # can use the application administration pages.
     def test_func(user):
-        return user.is_active and user.is_superuser
+        return user.is_active and getattr(user, "is_admin", False)
 
     # Define the wrapper function to handle the response
     def wrapper(request, *args, **kwargs):

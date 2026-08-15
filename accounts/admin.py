@@ -11,6 +11,7 @@ class UserAdmin(admin.ModelAdmin):
         "is_student",
         "is_lecturer",
         "is_parent",
+        "role",
         "is_staff",
     ]
     search_fields = [
@@ -31,4 +32,3 @@ class UserAdmin(admin.ModelAdmin):
 
 
 admin.site.register(User, UserAdmin)
-
