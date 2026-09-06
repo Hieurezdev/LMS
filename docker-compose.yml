@@ -1,3 +1,7 @@
+x-app-image: &app-image
+  image: django-lms:local
+  build: .
+
 services:
   db:
     image: postgres:16-alpine
@@ -15,7 +19,7 @@ services:
       retries: 5
 
   web:
-    build: .
+    <<: *app-image
     container_name: django_lms_web
     command: >
       sh -c "uv run python manage.py migrate &&
@@ -32,7 +36,7 @@ services:
         condition: service_healthy
 
   backup:
-    build: .
+    <<: *app-image
     container_name: django_lms_backup
     command: >
       sh -c "uv run python manage.py migrate --noinput && while true; do
