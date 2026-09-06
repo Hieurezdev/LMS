@@ -34,7 +34,9 @@ class CashierRegistrationForm(UserCreationForm):
 class ApprovalAuthenticationForm(AuthenticationForm):
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
-        if not user.is_approved:
+        # Django superusers are created by the trusted createsuperuser command
+        # and must not depend on the cashier approval workflow.
+        if not user.is_superuser and not user.is_approved:
             raise ValidationError(
                 "Tài khoản đang chờ quản trị viên duyệt.", code="pending_approval"
             )
