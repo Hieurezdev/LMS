@@ -8,6 +8,57 @@
 
 *Note: This repository is archived and read-only.*
 
+### CORS security
+
+CORS is enabled with an empty allow-list by default, so external websites
+cannot read the application's API responses. If a separate frontend needs
+access, add only its complete HTTPS origin to `.env`, for example:
+
+```env
+CORS_ALLOWED_ORIGINS=https://frontend.example.com
+CSRF_TRUSTED_ORIGINS=https://frontend.example.com
+```
+
+Do not use `*` or enable credentials for untrusted origins.
+
+### Backups
+
+Create one compressed archive containing all database records and uploaded media:
+
+```bash
+uv run python manage.py backup_data
+```
+
+The archive is written to `backups/` by default. A custom destination can be
+provided with `--output /path/to/lms-backup.tar.gz`. To restore the database,
+extract the archive, run migrations, and load `database.json` with
+`python manage.py loaddata database.json`; copy the archive's `media/` directory
+back to `MEDIA_ROOT`.
+
+When using Docker Compose, the `backup` service creates a backup immediately
+and then once every 24 hours. It keeps the two newest backups and deletes older
+ones after a successful backup. Start it with:
+
+```bash
+docker compose up -d backup
+```
+
+Inspect a backup without changing data:
+
+```bash
+uv run python manage.py inspect_backup backups/lms-backup-YYYYMMDDTHHMMSSZ.tar.gz
+```
+
+Restore by merging records and media into the current installation:
+
+```bash
+uv run python manage.py restore_data backups/lms-backup-YYYYMMDDTHHMMSSZ.tar.gz \
+  --yes-i-really-want-to-restore
+```
+
+For a complete replacement, add `--replace --replace-media`. Always create a
+new backup before using replacement mode.
+
 ---
 
 ### Learning management system using django web framework

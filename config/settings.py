@@ -53,6 +53,7 @@ DJANGO_APPS = [
 
 # Third party apps
 THIRD_PARTY_APPS = [
+    "corsheaders",
     "crispy_forms",
     "crispy_bootstrap5",
     "rest_framework",
@@ -70,6 +71,8 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + PROJECT_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Must run before CommonMiddleware so CORS headers are added consistently.
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -80,6 +83,12 @@ MIDDLEWARE = [
     "django.middleware.locale.LocaleMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # whitenoise to serve static files
 ]
+
+# Cross-origin access is disabled unless explicitly allow-listed in .env.
+# Never use "*" here for an authenticated application.
+CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
+CORS_ALLOW_CREDENTIALS = False
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
 
 ROOT_URLCONF = "config.urls"
 
@@ -200,6 +209,9 @@ STATICFILES_FINDERS = [
 # Media files config
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# Backups are kept outside the media directory so they are not served publicly.
+BACKUP_ROOT = config("BACKUP_ROOT", default=os.path.join(BASE_DIR, "backups"))
 
 # -----------------------------------
 # E-mail configuration

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block title %}Sao lưu dữ liệu{% endblock %}
+
+{% block content %}
+<div class="container-fluid pt-3">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Sao lưu dữ liệu</h1>
+      <p>Tải xuống hoặc khôi phục toàn bộ dữ liệu hệ thống.</p>
+    </div>
+    <div class="page-header-actions">
+      <a class="btn btn-outline-secondary" href="{% url 'admin_panel' %}">Quay lại</a>
+      <a class="btn btn-primary" href="{% url 'backup_download' %}"><i class="fas fa-download me-1"></i>Tạo và tải backup mới</a>
+    </div>
+  </div>
+
+  {% if messages %}{% for message in messages %}
+  <div class="alert alert-{{ message.tags|default:'info' }}" role="alert">{{ message }}</div>
+  {% endfor %}{% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-5">
+      <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+        <h5 class="fw-bold"><i class="fas fa-upload text-success me-2"></i>Khôi phục từ máy</h5>
+        <p class="small text-secondary">Mặc định hệ thống sẽ cập nhật/gộp dữ liệu từ backup vào dữ liệu hiện tại.</p>
+        <form method="post" action="{% url 'backup_restore' %}" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input class="form-control mb-3" type="file" name="backup_file" accept=".tar.gz" required>
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" name="replace" id="replace-backup">
+            <label class="form-check-label small text-danger" for="replace-backup">Thay thế toàn bộ dữ liệu hiện tại (xóa dữ liệu cũ)</label>
+          </div>
+          <button class="btn btn-outline-danger" type="submit" onclick="return confirm('Bạn có chắc muốn khôi phục backup không? Nếu chọn thay thế, dữ liệu hiện tại sẽ bị xóa.');"><i class="fas fa-rotate me-1"></i>Khôi phục backup</button>
+        </form>
+      </div>
+    </div>
+    <div class="col-12 col-xl-7">
+      <div class="card border-0 shadow-sm rounded-4 p-4">
+        <h5 class="fw-bold mb-3"><i class="fas fa-box-archive text-primary me-2"></i>Backup đã tạo</h5>
+        {% if backups %}
+        <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Tên file</th><th>Ngày tạo</th><th>Dung lượng</th><th></th></tr></thead><tbody>
+        {% for backup in backups %}<tr><td class="small">{{ backup.name }}</td><td class="small">{{ backup.created_at|date:'d/m/Y H:i' }}</td><td class="small">{{ backup.size|filesizeformat }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'backup_file_download' backup.name %}"><i class="fas fa-download"></i></a></td></tr>{% endfor %}
+        </tbody></table></div>
+        {% else %}<div class="text-secondary small">Chưa có backup nào.</div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

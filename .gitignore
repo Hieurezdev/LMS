@@ -150,3 +150,6 @@ media/result_sheet/*
 # Custom
 dump.rdb
 *.DS_Store
+
+# Local LMS backups can contain personal data and must not be committed.
+/backups/

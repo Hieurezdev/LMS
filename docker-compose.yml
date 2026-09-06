@@ -8,6 +8,11 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     build: .
@@ -23,7 +28,26 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+
+  backup:
+    build: .
+    container_name: django_lms_backup
+    command: >
+      sh -c "uv run python manage.py migrate --noinput && while true; do
+             uv run python manage.py backup_data --keep 2;
+             sleep 86400;
+             done"
+    volumes:
+      - .:/app
+      - /app/.venv
+      - ./backups:/app/backups
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:

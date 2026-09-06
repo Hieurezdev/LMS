@@ -76,5 +76,23 @@
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'student_list' %}"><i class="fas fa-user-graduate text-info mb-2"></i><div class="fw-bold text-dark">Học sinh</div><div class="small text-secondary">Hồ sơ và học phí</div></a></div>
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'payment_list' %}"><i class="fas fa-wallet text-warning mb-2"></i><div class="fw-bold text-dark">Giao dịch</div><div class="small text-secondary">Theo dõi các khoản thu</div></a></div>
   </div>
+
+  <div class="card border-0 shadow-sm rounded-4 p-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+      <div>
+        <div class="fw-bold text-dark"><i class="fas fa-database text-primary me-2"></i>Sao lưu dữ liệu</div>
+        <div class="small text-secondary mt-1">Tải toàn bộ database và file media về máy hoặc khôi phục từ backup.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <a class="btn btn-primary" href="{% url 'backup_download' %}"><i class="fas fa-download me-1"></i>Tạo và tải ngay</a>
+        <a class="btn btn-outline-secondary" href="{% url 'backup_center' %}"><i class="fas fa-folder-open me-1"></i>Quản lý backup</a>
+      </div>
+    </div>
+    {% if backups %}
+    <div class="table-responsive mt-4"><table class="table table-sm align-middle mb-0"><thead><tr><th>Backup gần đây</th><th>Thời gian</th><th>Dung lượng</th><th></th></tr></thead><tbody>
+      {% for backup in backups|slice:':5' %}<tr><td class="small">{{ backup.name }}</td><td class="small">{{ backup.created_at|date:'d/m/Y H:i' }}</td><td class="small">{{ backup.size|filesizeformat }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'backup_file_download' backup.name %}"><i class="fas fa-download me-1"></i>Tải</a></td></tr>{% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="small text-secondary mt-3">Chưa có backup nào.</div>{% endif %}
+  </div>
 </div>
 {% endblock %}
