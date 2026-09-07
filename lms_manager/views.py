@@ -698,17 +698,52 @@ def teacher_add_classroom(request, pk):
 
 def teacher_import_template(request):
     from django.http import HttpResponse
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="Template_Nhap_Lop_Giang_Vien.csv"'
-    
-    # Prepend UTF-8 BOM so Excel opens it with correct Vietnamese accents
-    response.write(b'\xef\xbb\xbf')
-    
-    writer = csv.writer(response)
-    writer.writerow(['Tên Lớp học', 'Môn giảng dạy'])
-    writer.writerow(['10A1', 'Toán học'])
-    writer.writerow(['11B2', 'Vật lí'])
-    writer.writerow(['Lớp Toán nâng cao', 'Hình học'])
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = 'Nhap lop'
+    worksheet.append(['Tên Lớp học', 'Môn giảng dạy'])
+    worksheet.append(['10A1', 'Toán học'])
+    worksheet.append(['11B2', 'Vật lí'])
+    worksheet.append(['Lớp Toán nâng cao', 'Hình học'])
+    worksheet.column_dimensions['A'].width = 28
+    worksheet.column_dimensions['B'].width = 24
+
+    output = io.BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="Template_Nhap_Lop_Giang_Vien.xlsx"'
+    response['Content-Length'] = str(output.tell())
+    return response
+
+
+def classroom_import_template(request):
+    """Create the Excel template used by the classroom student importer."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = 'Nhap hoc sinh'
+    worksheet.append(['Tên', 'Lớp', 'Ngày nhập học', 'STT'])
+    worksheet.append(['Nguyễn Văn A', 'Lớp hiện tại', '15/07/2026', 1])
+    worksheet.append(['Trần Thị B', 'Lớp hiện tại', '', 2])
+    worksheet.column_dimensions['A'].width = 28
+    worksheet.column_dimensions['B'].width = 22
+    worksheet.column_dimensions['C'].width = 18
+    worksheet.column_dimensions['D'].width = 10
+
+    output = io.BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="Mau_import_hoc_sinh.xlsx"'
+    response['Content-Length'] = str(output.tell())
     return response
 
 

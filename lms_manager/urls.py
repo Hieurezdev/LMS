@@ -71,6 +71,7 @@ urlpatterns = [
     path('periods/<int:pk>/delete/', views.payment_period_delete, name='payment_period_delete'),
     
     # Class import excel
+    path('classes/import-template/', views.classroom_import_template, name='classroom_import_template'),
     path('classes/<int:pk>/import-excel/', views.classroom_import_excel, name='classroom_import_excel'),
     
     # API for dynamic status toggle
