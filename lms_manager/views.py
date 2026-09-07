@@ -4,6 +4,8 @@ import io
 import json
 import re
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
 from django.http import FileResponse, HttpResponseForbidden, JsonResponse, HttpResponse
@@ -717,32 +719,6 @@ def teacher_import_template(request):
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
     response['Content-Disposition'] = 'attachment; filename="Template_Nhap_Lop_Giang_Vien.xlsx"'
-    response['Content-Length'] = str(output.tell())
-    return response
-
-
-def classroom_import_template(request):
-    """Create the Excel template used by the classroom student importer."""
-    from openpyxl import Workbook
-
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = 'Nhap hoc sinh'
-    worksheet.append(['Tên', 'Lớp', 'Ngày nhập học', 'STT'])
-    worksheet.append(['Nguyễn Văn A', 'Lớp hiện tại', '15/07/2026', 1])
-    worksheet.append(['Trần Thị B', 'Lớp hiện tại', '', 2])
-    worksheet.column_dimensions['A'].width = 28
-    worksheet.column_dimensions['B'].width = 22
-    worksheet.column_dimensions['C'].width = 18
-    worksheet.column_dimensions['D'].width = 10
-
-    output = io.BytesIO()
-    workbook.save(output)
-    response = HttpResponse(
-        output.getvalue(),
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    )
-    response['Content-Disposition'] = 'attachment; filename="Mau_import_hoc_sinh.xlsx"'
     response['Content-Length'] = str(output.tell())
     return response
 
@@ -2309,6 +2285,21 @@ def _parse_import_date(date_str):
         return parser.parse(date_str, dayfirst=True).date()
     except (ImportError, ValueError, TypeError):
         return None
+
+
+def classroom_import_template(request):
+    """Serve the original classroom import workbook with download headers."""
+    template_path = Path(settings.BASE_DIR) / 'static' / 'templates' / 'Mau_import_hoc_sinh.xlsx'
+    if not template_path.is_file():
+        return HttpResponse('Template file not found.', status=404)
+    response = FileResponse(
+        template_path.open('rb'),
+        as_attachment=True,
+        filename=template_path.name,
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Length'] = str(template_path.stat().st_size)
+    return response
 
 
 def classroom_import_excel(request, pk):
