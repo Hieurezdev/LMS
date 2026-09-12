@@ -36,8 +36,8 @@ extract the archive, run migrations, and load `database.json` with
 back to `MEDIA_ROOT`.
 
 When using Docker Compose, the `backup` service creates a backup immediately
-and then once every 24 hours. It keeps the two newest backups and deletes older
-ones after a successful backup. Start it with:
+and then once every hour. It keeps the 48 newest backups (approximately two
+days) and deletes older ones after a successful backup. Start it with:
 
 ```bash
 docker compose up -d backup

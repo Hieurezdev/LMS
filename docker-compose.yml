@@ -44,8 +44,8 @@ services:
     restart: unless-stopped
     command: >
       sh -c "uv run python manage.py migrate --noinput && while true; do
-             uv run python manage.py backup_data --keep 2;
-             sleep 86400;
+             uv run python manage.py backup_data --keep 48;
+             sleep 3600;
              done"
     volumes:
       - .:/app
