@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import translation
 from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, TeacherSettlement
-from lms_manager.views import assign_teacher_to_classroom
+from lms_manager.views import assign_teacher_to_classroom, sort_students_by_given_name
 
 
 @override_settings(STATICFILES_STORAGE='django.contrib.staticfiles.storage.StaticFilesStorage')
@@ -188,6 +188,20 @@ class LMSManagerQueryTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Thu học phí')
+
+    def test_classroom_student_sort_uses_given_name(self):
+        students = [
+            Student(name='Nguyễn Văn Bình'),
+            Student(name='Trần Minh An'),
+            Student(name='Lê Quốc Anh'),
+        ]
+
+        sorted_names = [student.name for student in sort_students_by_given_name(students)]
+
+        self.assertEqual(
+            sorted_names,
+            ['Trần Minh An', 'Lê Quốc Anh', 'Nguyễn Văn Bình'],
+        )
 
     def test_excel_import_uses_the_selected_classroom_and_teacher(self):
         upload = SimpleUploadedFile(

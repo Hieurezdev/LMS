@@ -88,7 +88,7 @@
         <table class="lms-table table table-hover align-middle mb-0 classroom-list-table" id="classroom-excel-table">
             <thead class="table-light">
                 <tr>
-                    <th class="text-center classroom-id">Mã lớp</th>
+                    <th class="text-center classroom-id">STT</th>
                     <th class="classroom-name">Tên lớp</th>
                     <th class="classroom-teacher">Giảng viên</th>
                     <th class="text-center classroom-count">Sĩ số</th>
@@ -100,7 +100,7 @@
             <tbody>
                 {% for item in class_reports %}
                     <tr>
-                        <td class="text-center text-secondary fw-semibold classroom-id">{{ item.classroom.id }}</td>
+                        <td class="text-center text-secondary fw-semibold classroom-id">{{ forloop.counter }}</td>
                         <td class="fw-semibold text-dark">
                             <a href="{% url 'classroom_detail' item.classroom.id %}" class="text-decoration-none text-primary">
                                 <i class="fas fa-school me-2 text-secondary"></i>{{ item.classroom.name }}

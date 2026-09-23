@@ -859,6 +859,21 @@ def sort_students_for_lists(students):
     )
 
 
+def sort_students_by_given_name(students):
+    """Sort student rows by the final word in the full name, then full name."""
+    return sorted(
+        students,
+        key=lambda student: (
+            student.name.strip().rsplit(maxsplit=1)[-1].casefold(),
+            student.name.casefold(),
+            -sum(
+                bool(getattr(student, f'payment_amount_{period_num}', None))
+                for period_num in range(1, 9)
+            ),
+        ),
+    )
+
+
 def formatted_excel_response(title, headers, rows, filename, details=None):
     """Create a plain, single-page A4 XLSX download."""
     from openpyxl import Workbook
@@ -2134,7 +2149,7 @@ def classroom_detail(request, pk):
             students_list.append(student)
 
         attach_payment_period_amounts(students_list, teacher=t)
-        students_list = sort_students_for_lists(students_list)
+        students_list = sort_students_by_given_name(students_list)
             
         teacher_reports.append({
             'teacher': t,
