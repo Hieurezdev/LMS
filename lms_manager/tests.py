@@ -206,6 +206,24 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(student.classroom, self.classroom)
         self.assertTrue(Enrollment.objects.filter(student=student, teacher=self.teacher).exists())
 
+    def test_excel_import_names_classroom_and_teacher_when_name_is_missing(self):
+        upload = SimpleUploadedFile(
+            'students.csv',
+            'Tên\n,\n'.encode('utf-8'),
+            content_type='text/csv',
+        )
+        with translation.override('en'):
+            response = self.client.post(
+                f"{reverse('classroom_import_excel', args=[self.classroom.id])}?teacher={self.teacher.id}",
+                {'excel_file': upload},
+            )
+
+        warning_messages = [str(message) for message in get_messages(response.wsgi_request)]
+        self.assertIn(
+            'Dòng 2: Bị bỏ qua vì thiếu Tên. (Lớp: 10A1; Giảng viên: Mr. Smith)',
+            warning_messages,
+        )
+
     def test_downloaded_student_excel_template_can_be_imported(self):
         template_path = Path(__file__).resolve().parents[1] / 'static/templates/Mau_import_hoc_sinh.xlsx'
         upload = SimpleUploadedFile(

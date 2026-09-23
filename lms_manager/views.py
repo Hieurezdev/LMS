@@ -2379,13 +2379,17 @@ def classroom_import_excel(request, pk):
 
             # Process rows
             imported_count = 0
+            import_context = f"Lớp: {classroom.name}; Giảng viên: {teacher.name if teacher else 'Chưa gán'}"
             for row_idx, row in enumerate(rows[header_row_index + 1:], start=header_row_index + 2):
                 if not row or len(row) <= max(header_map.values()):
                     continue
                     
                 name = row[header_map['Tên']].strip()
                 if not name:
-                    messages.warning(request, f"Dòng {row_idx}: Bị bỏ qua vì thiếu Tên.")
+                    messages.warning(
+                        request,
+                        f"Dòng {row_idx}: Bị bỏ qua vì thiếu Tên. ({import_context})",
+                    )
                     continue
                     
                 capitalized_name = " ".join(word.capitalize() for word in name.split())
