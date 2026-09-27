@@ -11,7 +11,7 @@ from django import forms
 from django.http import FileResponse, HttpResponseForbidden, JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
-from django.db.models import Min, Prefetch, Sum, Count, Q
+from django.db.models import Prefetch, Sum, Count, Q
 from django.db import transaction, DatabaseError
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -464,26 +464,27 @@ def subject_delete(request, pk):
 # -------------------------------------------------------------
 def teacher_list(request):
     search_query = request.GET.get('q', '').strip()
-    sort_by = request.GET.get('sort', 'name')
+    selected_subject_id = request.GET.get('subject', '').strip()
+    subjects = Subject.objects.order_by('name')
     teachers = Teacher.objects.all().prefetch_related(
         Prefetch('subjects', queryset=Subject.objects.order_by('name')),
         'classes',
     )
+    selected_subject = None
+    if selected_subject_id.isdigit():
+        selected_subject = subjects.filter(pk=int(selected_subject_id)).first()
+        if selected_subject:
+            teachers = teachers.filter(subjects=selected_subject).distinct()
     if search_query:
         teachers = teachers.filter(
             Q(name__icontains=search_query) | Q(phone__icontains=search_query)
         )
-    if sort_by == 'subject':
-        teachers = teachers.annotate(first_subject_name=Min('subjects__name')).order_by(
-            'first_subject_name', 'name'
-        )
-    else:
-        sort_by = 'name'
-        teachers = teachers.order_by('name')
+    teachers = teachers.order_by('name')
     return render(request, 'lms_manager/teacher_list.html', {
         'teachers': teachers,
+        'subjects': subjects,
+        'selected_subject': selected_subject,
         'search_query': search_query,
-        'sort_by': sort_by,
     })
 
 def teacher_create(request):
