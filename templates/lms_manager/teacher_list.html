@@ -43,6 +43,13 @@
         <a href="{% url 'teacher_list' %}" class="btn btn-outline-secondary">Xóa lọc</a>
         {% endif %}
       </div>
+      <div class="col-12 col-md-auto">
+        <label for="teacher-sort" class="form-label visually-hidden">Sắp xếp giảng viên</label>
+        <select id="teacher-sort" name="sort" class="form-select" onchange="this.form.submit()">
+          <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Sắp xếp theo tên</option>
+          <option value="subject" {% if sort_by == 'subject' %}selected{% endif %}>Sắp xếp theo môn học</option>
+        </select>
+      </div>
     </div>
   </form>
 

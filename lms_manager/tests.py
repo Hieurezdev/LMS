@@ -102,6 +102,19 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(by_phone, other_teacher.name)
         self.assertNotContains(by_phone, self.teacher.name)
 
+    def test_teacher_list_can_sort_by_subject(self):
+        physics = Subject.objects.create(name='Physics')
+        other_teacher = Teacher.objects.create(name='Ms. Jones')
+        other_teacher.subjects.add(physics)
+
+        response = self.client.get(reverse('teacher_list'), {'sort': 'subject'})
+
+        self.assertEqual(
+            [teacher.name for teacher in response.context['teachers']],
+            ['Mr. Smith', 'Ms. Jones'],
+        )
+        self.assertEqual(response.context['sort_by'], 'subject')
+
     def test_teacher_with_settlement_can_be_deleted_after_confirmation(self):
         settlement = TeacherSettlement.objects.create(
             teacher=self.teacher,
