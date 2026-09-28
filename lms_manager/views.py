@@ -1322,6 +1322,8 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
     return batch
 
 def payment_create(request):
+    student_id = request.GET.get('student', '')
+    student = None
     if request.method == 'POST':
         batch_items = request.POST.get('batch_items')
         if batch_items is not None:
@@ -1487,13 +1489,17 @@ def payment_create(request):
             messages.error(request, "Thông tin nhập không hợp lệ!")
     else:
         initial_data = {}
-        student_id = request.GET.get('student')
         if student_id:
             student = Student.objects.filter(id=student_id).first()
             if student:
                 initial_data['student_name'] = student.name
         form = PaymentForm(initial=initial_data)
-        
+
+    selected_classroom_id = request.GET.get('classroom', '').strip()
+    if student_id and student and student.classroom_id:
+        selected_classroom_id = str(student.classroom_id)
+
+    classrooms = ClassRoom.objects.order_by('name')
     existing_students = Student.objects.all().order_by('name').prefetch_related(
         'enrollments__teacher', 'payments__payment_period'
     )
@@ -1508,6 +1514,8 @@ def payment_create(request):
         ]
     return render(request, 'lms_manager/payment_create.html', {
         'form': form,
+        'classrooms': classrooms,
+        'selected_classroom_id': selected_classroom_id,
         'existing_students': existing_students
     })
 

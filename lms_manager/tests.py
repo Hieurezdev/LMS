@@ -216,6 +216,8 @@ class LMSManagerQueryTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Thu học phí')
+        self.assertContains(response, 'Chọn lớp học trước')
+        self.assertEqual(list(response.context['classrooms']), [self.classroom])
 
     def test_classroom_student_sort_uses_given_name(self):
         students = [
