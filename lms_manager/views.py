@@ -348,7 +348,14 @@ def cashier_due_list(request):
 # CLASSROOM CRUD
 # -------------------------------------------------------------
 def classroom_list(request):
+    selected_subject_id = request.GET.get('subject', '').strip()
+    subjects = Subject.objects.order_by('name')
+    selected_subject = None
     classes = ClassRoom.objects.all().prefetch_related('teachers')
+    if selected_subject_id.isdigit():
+        selected_subject = subjects.filter(pk=int(selected_subject_id)).first()
+        if selected_subject:
+            classes = classes.filter(teachers__subjects=selected_subject).distinct()
     
     class_reports = []
     for c in classes:
@@ -372,7 +379,11 @@ def classroom_list(request):
     # Sort by classroom name, and then by first teacher name if names are identical
     class_reports.sort(key=lambda x: (x['classroom'].name.lower(), x['first_teacher_name'].lower()))
         
-    return render(request, 'lms_manager/classroom_list.html', {'class_reports': class_reports})
+    return render(request, 'lms_manager/classroom_list.html', {
+        'class_reports': class_reports,
+        'subjects': subjects,
+        'selected_subject': selected_subject,
+    })
 
 def classroom_create(request):
     if request.method == 'POST':

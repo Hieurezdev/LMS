@@ -115,6 +115,21 @@ class LMSManagerQueryTest(TestCase):
         )
         self.assertEqual(response.context['selected_subject'], physics)
 
+    def test_classroom_list_can_filter_by_teacher_subject(self):
+        physics = Subject.objects.create(name='Physics')
+        other_classroom = ClassRoom.objects.create(name='10A2')
+        other_teacher = Teacher.objects.create(name='Ms. Jones')
+        other_teacher.subjects.add(physics)
+        other_teacher.classes.add(other_classroom)
+
+        response = self.client.get(reverse('classroom_list'), {'subject': physics.id})
+
+        self.assertEqual(
+            [report['classroom'].name for report in response.context['class_reports']],
+            ['10A2'],
+        )
+        self.assertEqual(response.context['selected_subject'], physics)
+
     def test_teacher_with_settlement_can_be_deleted_after_confirmation(self):
         settlement = TeacherSettlement.objects.create(
             teacher=self.teacher,
