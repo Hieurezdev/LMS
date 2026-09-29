@@ -73,14 +73,26 @@
     {% endfor %}
 {% endif %}
 
+<form method="get" class="card p-3 mb-4 border-0 shadow-sm">
+    <div class="input-group">
+        <span class="input-group-text bg-white"><i class="fas fa-search text-secondary"></i></span>
+        <input type="search" name="q" value="{{ classroom_query }}" class="form-control" placeholder="Tìm theo tên lớp..." aria-label="Tìm theo tên lớp">
+        {% if selected_subject %}<input type="hidden" name="subject" value="{{ selected_subject.id }}">{% endif %}
+        <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+        {% if classroom_query %}
+        <a href="{% url 'classroom_list' %}{% if selected_subject %}?subject={{ selected_subject.id }}{% endif %}" class="btn btn-outline-secondary">Xóa tìm kiếm</a>
+        {% endif %}
+    </div>
+</form>
+
 <div class="card p-3 mb-4 border-0 shadow-sm">
     <div class="fw-bold text-dark mb-2"><i class="fas fa-book-open me-2 text-primary"></i>Chọn môn học để xem lớp</div>
     <div class="d-flex flex-wrap gap-2">
-        <a href="{% url 'classroom_list' %}" class="btn btn-sm {% if not selected_subject %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <a href="{% url 'classroom_list' %}{% if classroom_query %}?q={{ classroom_query|urlencode }}{% endif %}" class="btn btn-sm {% if not selected_subject %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Tất cả môn học
         </a>
         {% for subject in subjects %}
-        <a href="{% url 'classroom_list' %}?subject={{ subject.id }}" class="btn btn-sm {% if selected_subject.id == subject.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <a href="{% url 'classroom_list' %}?subject={{ subject.id }}{% if classroom_query %}&q={{ classroom_query|urlencode }}{% endif %}" class="btn btn-sm {% if selected_subject.id == subject.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">
             {{ subject.name }}
         </a>
         {% empty %}

@@ -349,9 +349,12 @@ def cashier_due_list(request):
 # -------------------------------------------------------------
 def classroom_list(request):
     selected_subject_id = request.GET.get('subject', '').strip()
+    classroom_query = request.GET.get('q', '').strip()
     subjects = Subject.objects.order_by('name')
     selected_subject = None
     classes = ClassRoom.objects.all().prefetch_related('teachers')
+    if classroom_query:
+        classes = classes.filter(name__icontains=classroom_query)
     if selected_subject_id.isdigit():
         selected_subject = subjects.filter(pk=int(selected_subject_id)).first()
         if selected_subject:
@@ -383,6 +386,7 @@ def classroom_list(request):
         'class_reports': class_reports,
         'subjects': subjects,
         'selected_subject': selected_subject,
+        'classroom_query': classroom_query,
     })
 
 def classroom_create(request):
@@ -1495,7 +1499,6 @@ def payment_create(request):
                 initial_data['student_name'] = student.name
         form = PaymentForm(initial=initial_data)
 
-    classrooms = ClassRoom.objects.order_by('name')
     existing_students = Student.objects.all().order_by('name').prefetch_related(
         'enrollments__teacher', 'payments__payment_period'
     )
@@ -1510,7 +1513,6 @@ def payment_create(request):
         ]
     return render(request, 'lms_manager/payment_create.html', {
         'form': form,
-        'classrooms': classrooms,
         'existing_students': existing_students
     })
 

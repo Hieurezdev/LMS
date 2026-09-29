@@ -73,14 +73,10 @@
       {id: {{ student.id }}, name: "{{ student.name|escapejs }}", classroomId: {% if student.classroom_id %}{{ student.classroom_id }}{% else %}null{% endif %}, classroom: "{{ student.classroom.name|default:'Chưa xếp lớp'|escapejs }}", unpaidPeriods: {{ student.unpaid_period_numbers|safe }}, teachers: [{% for enrollment in student.enrollments.all %}{id: {{ enrollment.teacher.id }}, name: "{{ enrollment.teacher.name|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]},
     {% endfor %}
   ];
-  const classrooms = [
-    {% for classroom in classrooms %}
-      {id: {{ classroom.id }}, name: "{{ classroom.name|escapejs }}"},
-    {% endfor %}
-  ];
   const periodOptions = Array.from({length: 8}, (_, index) => `<label class="btn btn-outline-secondary btn-sm py-0"><input class="period-input visually-hidden" type="checkbox" value="${index + 1}"> Đợt ${index + 1}</label>`).join(' ');
   const paymentList = document.querySelector('#batch-payment-list');
   const money = new Intl.NumberFormat('en-US');
+  let lastSelectedStudentId = null;
 
   function escapeHtml(value) {
     const element = document.createElement('div'); element.textContent = value; return element.innerHTML;
@@ -105,7 +101,6 @@
   function clearStudent(row) {
     row.querySelector('.student-id-input').value = '';
     row.querySelector('.student-name-input').value = '';
-    row.querySelector('.student-name-input').disabled = false;
     row.querySelector('.teacher-input').innerHTML = '<option value="">Chọn giảng viên</option>';
     row.querySelector('.teacher-input').disabled = true;
     row.querySelectorAll('.period-input').forEach(input => {
@@ -119,40 +114,44 @@
     const total = [...paymentList.querySelectorAll('.batch-payment-row')].reduce((sum, row) => sum + ((Number(row.querySelector('.amount-input').value) || 0) * row.querySelectorAll('.period-input:checked').length), 0);
     document.querySelector('#batch-total').textContent = `${money.format(total)} VNĐ`;
   }
-  function addRow() {
+  function addRow(studentToPrefill = null) {
     const row = document.createElement('div');
     row.className = 'batch-payment-row border rounded-3 p-3 bg-light bg-opacity-25 position-relative';
-    row.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-3"><strong class="text-dark"><i class="fas fa-receipt text-primary me-2"></i>Khoản thu</strong><button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Xóa khoản thu"><i class="fas fa-times me-1"></i>Xóa</button></div><div class="mb-3"><label class="form-label fw-semibold small">Lớp học <span class="text-secondary fw-normal">(tùy chọn)</span></label><div class="position-relative"><input type="hidden" class="classroom-id-input"><input type="text" class="form-control classroom-name-input" autocomplete="off" placeholder="Nhập tên lớp để tìm kiếm..."><div class="classroom-suggestions position-absolute w-100 bg-white border rounded-2 shadow-sm d-none" style="z-index:21; max-height:200px; overflow-y:auto;"></div></div></div><div class="mb-3"><label class="form-label fw-semibold small">Học sinh</label><div class="position-relative"><input type="hidden" class="student-id-input"><input type="text" class="form-control student-name-input" autocomplete="off" placeholder="Nhập tên học sinh để tìm kiếm..."><div class="student-suggestions position-absolute w-100 bg-white border rounded-2 shadow-sm d-none" style="z-index:20; max-height:200px; overflow-y:auto;"></div></div></div><div class="mb-3"><label class="form-label fw-semibold small">Giảng viên</label><select class="form-select teacher-input" disabled><option value="">Chọn giảng viên</option></select></div><div class="mb-3"><label class="form-label fw-semibold small d-block">Đợt thu</label><div class="period-picker d-flex flex-wrap gap-2">${periodOptions}</div><div class="form-text">Có thể chọn nhiều đợt cho cùng học sinh.</div></div><div><label class="form-label fw-semibold small">Số tiền mỗi đợt (VNĐ)</label><input type="number" min="1" step="1" class="form-control amount-input" placeholder="Ví dụ: 500000"><div class="d-flex flex-wrap align-items-center gap-2 mt-2"><span class="text-secondary small">Chọn nhanh:</span><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="75000">75k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="125000">125k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="250000">250k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="300000">300k</button></div></div>`;
-    const classroomNameInput = row.querySelector('.classroom-name-input');
-    const classroomIdInput = row.querySelector('.classroom-id-input');
-    const classroomSuggestions = row.querySelector('.classroom-suggestions');
+    row.innerHTML = `<div class="d-flex justify-content-between align-items-center mb-3"><strong class="text-dark"><i class="fas fa-receipt text-primary me-2"></i>Khoản thu</strong><button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Xóa khoản thu"><i class="fas fa-times me-1"></i>Xóa</button></div><div class="mb-3"><label class="form-label fw-semibold small">Học sinh</label><div class="position-relative"><input type="hidden" class="student-id-input"><input type="text" class="form-control student-name-input" autocomplete="off" placeholder="Nhập tên học sinh để tìm kiếm..."><div class="student-suggestions position-absolute w-100 bg-white border rounded-2 shadow-sm d-none" style="z-index:20; max-height:200px; overflow-y:auto;"></div></div></div><div class="mb-3"><label class="form-label fw-semibold small">Giảng viên</label><select class="form-select teacher-input" disabled><option value="">Chọn giảng viên</option></select></div><div class="mb-3"><label class="form-label fw-semibold small d-block">Đợt thu</label><div class="period-picker d-flex flex-wrap gap-2">${periodOptions}</div><div class="form-text">Có thể chọn nhiều đợt cho cùng học sinh.</div></div><div><label class="form-label fw-semibold small">Số tiền mỗi đợt (VNĐ)</label><input type="number" min="1" step="1" class="form-control amount-input" placeholder="Ví dụ: 500000"><div class="d-flex flex-wrap align-items-center gap-2 mt-2"><span class="text-secondary small">Chọn nhanh:</span><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="75000">75k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="125000">125k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="250000">250k</button><button type="button" class="btn btn-outline-primary btn-sm quick-amount" data-amount="300000">300k</button></div></div>`;
     const nameInput = row.querySelector('.student-name-input');
     const studentIdInput = row.querySelector('.student-id-input');
     const suggestions = row.querySelector('.student-suggestions');
     const normalized = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
-    const selectClassroom = classroom => { classroomIdInput.value = classroom.id; classroomNameInput.value = classroom.name; classroomSuggestions.classList.add('d-none'); clearStudent(row); nameInput.disabled = false; };
-    const selectStudent = student => { studentIdInput.value = student.id; nameInput.value = `${student.name} - ${student.classroom}`; suggestions.classList.add('d-none'); updateTeachers(row); updatePeriods(row); row.querySelector('.teacher-input').disabled = false; };
-    const showClassroomSuggestions = clearSelection => {
-      const query = normalized(classroomNameInput.value.trim());
-      if (clearSelection) { classroomIdInput.value = ''; clearStudent(row); }
-      const matches = classrooms.filter(classroom => !query || normalized(classroom.name).includes(query)).slice(0, 8);
-      classroomSuggestions.innerHTML = matches.length ? matches.map(classroom => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 classroom-suggestion" data-id="${classroom.id}">${escapeHtml(classroom.name)}</button>`).join('') : '<div class="px-3 py-2 text-secondary small">Không tìm thấy lớp phù hợp</div>';
-      classroomSuggestions.classList.remove('d-none');
-      classroomSuggestions.querySelectorAll('.classroom-suggestion').forEach(button => button.addEventListener('mousedown', event => { event.preventDefault(); selectClassroom(classrooms.find(classroom => classroom.id === Number(button.dataset.id))); }));
+    const selectStudent = student => {
+      studentIdInput.value = student.id;
+      nameInput.value = `${student.name} - ${student.classroom}`;
+      lastSelectedStudentId = student.id;
+      suggestions.classList.add('d-none');
+      updateTeachers(row);
+      updatePeriods(row);
+      row.querySelector('.teacher-input').disabled = false;
     };
     const showSuggestions = clearSelection => {
       const query = normalized(nameInput.value.trim());
       if (clearSelection) studentIdInput.value = '';
-      const selectedClassroomId = classroomIdInput.value ? Number(classroomIdInput.value) : null;
-      const matches = students.filter(student => (!selectedClassroomId || student.classroomId === selectedClassroomId) && student.unpaidPeriods.length && (!query || normalized(`${student.name} ${student.classroom}`).includes(query))).slice(0, 8);
+      const matches = students
+        .filter(student => student.unpaidPeriods.length && (!query || normalized(`${student.name} ${student.classroom}`).includes(query)))
+        .sort((a, b) => {
+          if (!query) return 0;
+          const rank = student => {
+            const name = normalized(student.name);
+            if (name === query) return 0;
+            if (name.startsWith(query)) return 1;
+            return 2;
+          };
+          return rank(a) - rank(b) || normalized(a.name).localeCompare(normalized(b.name));
+        })
+        .slice(0, 8);
       suggestions.innerHTML = matches.length ? matches.map(student => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 student-suggestion" data-id="${student.id}"><strong>${escapeHtml(student.name)}</strong><br><small class="text-secondary">${escapeHtml(student.classroom)}</small></button>`).join('') : '<div class="px-3 py-2 text-secondary small">Không tìm thấy học sinh phù hợp</div>';
       suggestions.classList.remove('d-none');
       suggestions.querySelectorAll('.student-suggestion').forEach(button => button.addEventListener('mousedown', event => { event.preventDefault(); selectStudent(students.find(student => student.id === Number(button.dataset.id))); }));
     };
-    classroomNameInput.addEventListener('input', () => showClassroomSuggestions(true));
-    classroomNameInput.addEventListener('focus', () => showClassroomSuggestions(false));
-    classroomNameInput.addEventListener('blur', () => setTimeout(() => classroomSuggestions.classList.add('d-none'), 150));
-    nameInput.addEventListener('input', () => showSuggestions(true));
+    nameInput.addEventListener('input', () => { lastSelectedStudentId = null; showSuggestions(true); });
     nameInput.addEventListener('focus', () => showSuggestions(false));
     nameInput.addEventListener('keydown', event => {
       if (event.key === 'Enter') {
@@ -169,8 +168,12 @@
     row.querySelectorAll('.period-input').forEach(input => input.addEventListener('change', () => { input.closest('label').classList.toggle('active', input.checked); updateTotal(); }));
     row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateTotal(); });
     paymentList.appendChild(row);
+    if (studentToPrefill) selectStudent(studentToPrefill);
   }
-  document.querySelector('#add-payment-row').addEventListener('click', addRow);
+  document.querySelector('#add-payment-row').addEventListener('click', () => {
+    const student = students.find(item => item.id === lastSelectedStudentId);
+    addRow(student || null);
+  });
   addRow();
 
   let paymentSubmitConfirmed = false;

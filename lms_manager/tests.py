@@ -216,8 +216,19 @@ class LMSManagerQueryTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Thu học phí')
-        self.assertContains(response, 'Nhập tên lớp để tìm kiếm')
-        self.assertEqual(list(response.context['classrooms']), [self.classroom])
+        self.assertContains(response, 'Nhập tên học sinh để tìm kiếm')
+        self.assertNotContains(response, 'Nhập tên lớp để tìm kiếm')
+
+    def test_classroom_list_can_search_by_name(self):
+        other_classroom = ClassRoom.objects.create(name='11B2')
+
+        with translation.override('en'):
+            response = self.client.get(reverse('classroom_list'), {'q': '10A'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['classroom_query'], '10A')
+        self.assertContains(response, self.classroom.name)
+        self.assertNotContains(response, other_classroom.name)
 
     def test_classroom_student_sort_uses_given_name(self):
         students = [
