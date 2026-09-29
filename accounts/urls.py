@@ -13,6 +13,7 @@ from .views import (
     backup_download,
     backup_file_download,
     backup_restore,
+    backup_restore_previous,
 )
 
 urlpatterns = [
@@ -24,6 +25,7 @@ urlpatterns = [
     path("admin_panel/backups/", backup_center, name="backup_center"),
     path("admin_panel/backups/create/", backup_download, name="backup_download"),
     path("admin_panel/backups/restore/", backup_restore, name="backup_restore"),
+    path("admin_panel/backups/restore-previous/<str:filename>/", backup_restore_previous, name="backup_restore_previous"),
     path("admin_panel/backups/<str:filename>/download/", backup_file_download, name="backup_file_download"),
     path("profile/", profile, name="profile"),
     path("profile/<int:id>/detail/", profile_single, name="profile_single"),

@@ -12,6 +12,7 @@ from django import forms
 from django.http import FileResponse, HttpResponseForbidden, JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
+from django.core.management import call_command, CommandError
 from django.db.models import Prefetch, Sum, Count, Q
 from django.db import transaction, DatabaseError
 from django.contrib import messages
@@ -19,6 +20,27 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from .models import ClassRoom, Subject, Teacher, Student, Enrollment, Payment, PaymentPeriod, PaymentBatch, TeacherSettlement
 from .forms import ClassRoomForm, SubjectForm, TeacherForm, StudentForm, EnrollmentForm, PaymentForm, PaymentPeriodForm
+
+
+def create_pre_delete_backup(label):
+    """Create a full backup before a destructive data operation."""
+    backup_root = Path(settings.BACKUP_ROOT)
+    backup_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    backup_path = backup_root / f'lms-deleted-{label}-{timestamp}.tar.gz'
+    call_command('backup_data', output=str(backup_path), verbosity=0)
+    return backup_path
+
+
+def prepare_delete_backup(request, label):
+    try:
+        backup_path = create_pre_delete_backup(label)
+        request.session['last_delete_backup'] = backup_path.name
+        request.session.modified = True
+        return backup_path
+    except (CommandError, DatabaseError, OSError) as exc:
+        messages.error(request, f'Không thể tạo backup trước khi xóa: {exc}')
+        return None
 
 # -------------------------------------------------------------
 # DASHBOARD
@@ -441,22 +463,28 @@ def classroom_update(request, pk):
 
 def classroom_delete(request, pk):
     classroom = get_object_or_404(ClassRoom, pk=pk)
+    backup_path = prepare_delete_backup(request, f'classroom-{classroom.pk}')
+    if backup_path is None:
+        return redirect('classroom_list')
     student_count = classroom.students.count()
     with transaction.atomic():
         TeacherSettlement.objects.filter(classroom=classroom).delete()
         classroom.delete()
-    messages.success(request, f"Đã xóa lớp học và {student_count} học sinh liên quan!")
+    messages.success(request, f"Đã xóa lớp học và {student_count} học sinh liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('classroom_list')
 
 
 @require_POST
 def classroom_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-classrooms')
+    if backup_path is None:
+        return redirect('classroom_list')
     count = ClassRoom.objects.count()
     student_count = Student.objects.filter(classroom__isnull=False).count()
     with transaction.atomic():
         TeacherSettlement.objects.all().delete()
         ClassRoom.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} lớp học, {student_count} học sinh và dữ liệu liên quan.")
+    messages.success(request, f"Đã xóa {count} lớp học, {student_count} học sinh và dữ liệu liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('classroom_list')
 
 
@@ -470,10 +498,13 @@ def subject_list(request):
 
 @require_POST
 def subject_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-subjects')
+    if backup_path is None:
+        return redirect('subject_list')
     count = Subject.objects.count()
     PaymentBatch.objects.all().delete()
     Subject.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} môn học và dữ liệu liên quan.")
+    messages.success(request, f"Đã xóa {count} môn học và dữ liệu liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('subject_list')
 
 def subject_create(request):
@@ -501,8 +532,11 @@ def subject_update(request, pk):
 
 def subject_delete(request, pk):
     subject = get_object_or_404(Subject, pk=pk)
+    backup_path = prepare_delete_backup(request, f'subject-{subject.pk}')
+    if backup_path is None:
+        return redirect('subject_list')
     subject.delete()
-    messages.success(request, "Đã xóa môn học!")
+    messages.success(request, f"Đã xóa môn học. Backup trước xóa: {backup_path.name}")
     return redirect('subject_list')
 
 
@@ -713,6 +747,9 @@ def teacher_update(request, pk):
 @require_POST
 def teacher_delete(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
+    backup_path = prepare_delete_backup(request, f'teacher-{teacher.pk}')
+    if backup_path is None:
+        return redirect('teacher_list')
     classrooms = ClassRoom.objects.filter(pk__in=teacher.classes.values('pk'))
     classroom_count = classrooms.count()
     student_count = Student.objects.filter(classroom__in=classrooms).count()
@@ -725,13 +762,16 @@ def teacher_delete(request, pk):
         teacher.delete()
     messages.success(
         request,
-        f"Đã xóa giảng viên, {classroom_count} lớp học, {student_count} học sinh và {settlement_count} dữ liệu quyết toán liên quan.",
+        f"Đã xóa giảng viên, {classroom_count} lớp học, {student_count} học sinh và {settlement_count} dữ liệu quyết toán liên quan. Backup trước xóa: {backup_path.name}",
     )
     return redirect('teacher_list')
 
 
 @require_POST
 def teacher_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-teachers')
+    if backup_path is None:
+        return redirect('teacher_list')
     count = Teacher.objects.count()
     classrooms = ClassRoom.objects.filter(pk__in=Teacher.objects.values('classes'))
     classroom_count = classrooms.count()
@@ -741,7 +781,7 @@ def teacher_delete_all(request):
         PaymentBatch.objects.all().delete()
         classrooms.delete()
         Teacher.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} giảng viên, {classroom_count} lớp học, {student_count} học sinh và dữ liệu liên quan.")
+    messages.success(request, f"Đã xóa {count} giảng viên, {classroom_count} lớp học, {student_count} học sinh và dữ liệu liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('teacher_list')
 
 
@@ -1215,17 +1255,23 @@ def student_update(request, pk):
 
 def student_delete(request, pk):
     student = get_object_or_404(Student, pk=pk)
+    backup_path = prepare_delete_backup(request, f'student-{student.pk}')
+    if backup_path is None:
+        return redirect('student_list')
     student.delete()
-    messages.success(request, "Đã xóa học sinh!")
+    messages.success(request, f"Đã xóa học sinh. Backup trước xóa: {backup_path.name}")
     return redirect('student_list')
 
 
 @require_POST
 def student_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-students')
+    if backup_path is None:
+        return redirect('student_list')
     count = Student.objects.count()
     PaymentBatch.objects.all().delete()
     Student.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} học sinh và dữ liệu liên quan.")
+    messages.success(request, f"Đã xóa {count} học sinh và dữ liệu liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('student_list')
 
 def student_register(request, student_id):
@@ -1264,9 +1310,12 @@ def student_register(request, student_id):
 
 def enrollment_delete(request, pk):
     enrollment = get_object_or_404(Enrollment, pk=pk)
+    backup_path = prepare_delete_backup(request, f'enrollment-{enrollment.pk}')
+    if backup_path is None:
+        return redirect('student_register', student_id=enrollment.student_id)
     student_id = enrollment.student.id
     enrollment.delete()
-    messages.success(request, "Đã hủy đăng ký môn học!")
+    messages.success(request, f"Đã hủy đăng ký môn học. Backup trước xóa: {backup_path.name}")
     return redirect('student_register', student_id=student_id)
 
 
@@ -1280,10 +1329,13 @@ def payment_list(request):
 
 @require_POST
 def payment_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-payments')
+    if backup_path is None:
+        return redirect('payment_list')
     count = Payment.objects.count()
     PaymentBatch.objects.all().delete()
     Payment.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} giao dịch học phí.")
+    messages.success(request, f"Đã xóa {count} giao dịch học phí. Backup trước xóa: {backup_path.name}")
     return redirect('payment_list')
 
 
@@ -1562,6 +1614,9 @@ def payment_create(request):
 
 def payment_delete(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
+    backup_path = prepare_delete_backup(request, f'payment-{payment.pk}')
+    if backup_path is None:
+        return redirect('payment_list')
     student = payment.student
     period = payment.payment_period
     
@@ -1581,7 +1636,7 @@ def payment_delete(request, pk):
             setattr(student, f"dot_{period_num}", "Chưa đóng")
             student.save()
             
-    messages.success(request, "Đã xóa đợt đóng tiền!")
+    messages.success(request, f"Đã xóa giao dịch. Backup trước xóa: {backup_path.name}")
     
     next_url = request.GET.get('next') or request.META.get('HTTP_REFERER')
     if next_url:
@@ -2313,10 +2368,13 @@ def payment_period_list(request):
 
 @require_POST
 def payment_period_delete_all(request):
+    backup_path = prepare_delete_backup(request, 'all-payment-periods')
+    if backup_path is None:
+        return redirect('payment_period_list')
     count = PaymentPeriod.objects.count()
     PaymentBatch.objects.all().delete()
     PaymentPeriod.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} đợt đóng tiền và giao dịch liên quan.")
+    messages.success(request, f"Đã xóa {count} đợt đóng tiền và giao dịch liên quan. Backup trước xóa: {backup_path.name}")
     return redirect('payment_period_list')
 
 def payment_period_create(request):
@@ -2349,8 +2407,11 @@ def payment_period_update(request, pk):
 
 def payment_period_delete(request, pk):
     period = get_object_or_404(PaymentPeriod, pk=pk)
+    backup_path = prepare_delete_backup(request, f'payment-period-{period.pk}')
+    if backup_path is None:
+        return redirect('payment_period_list')
     period.delete()
-    messages.success(request, "Đã xóa đợt đóng tiền!")
+    messages.success(request, f"Đã xóa đợt đóng tiền. Backup trước xóa: {backup_path.name}")
     return redirect('payment_period_list')
 
 

@@ -18,6 +18,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.forms import PasswordChangeForm
+from django.views.decorators.http import require_POST
 from .decorators import admin_required
 from .forms import AdminCashierCreateForm, ApprovalAuthenticationForm, ProfileUpdateForm
 from .models import User
@@ -76,12 +77,7 @@ def profile_single(request, id):
 @login_required
 @admin_required
 def admin_panel(request):
-    backup_root = Path(settings.BACKUP_ROOT)
-    backup_paths = sorted(
-        backup_root.glob("lms-backup-*.tar.gz"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    ) if backup_root.exists() else []
+    backup_paths = _list_backup_paths()
     return render(
         request,
         "setting/admin_panel.html",
@@ -108,14 +104,23 @@ def admin_panel(request):
 @login_required
 @admin_required
 def backup_center(request):
-    backup_root = Path(settings.BACKUP_ROOT)
-    backup_paths = sorted(
-        backup_root.glob("lms-backup-*.tar.gz"),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
-    ) if backup_root.exists() else []
+    backup_paths = _list_backup_paths()
     backups = [_backup_info(path) for path in backup_paths]
     return render(request, "setting/backup_center.html", {"backups": backups})
+
+
+def _list_backup_paths():
+    backup_root = Path(settings.BACKUP_ROOT)
+    if not backup_root.exists():
+        return []
+    return sorted(
+        [
+            *backup_root.glob("lms-backup-*.tar.gz"),
+            *backup_root.glob("lms-deleted-*.tar.gz"),
+        ],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
 
 
 def _backup_info(backup_path):
@@ -192,6 +197,39 @@ def backup_restore(request):
 
     messages.success(request, "Đã khôi phục dữ liệu từ file backup.")
     return redirect("backup_center")
+
+
+@login_required
+@admin_required
+@require_POST
+def backup_restore_previous(request, filename):
+    """Restore the most recent pre-delete snapshot as a one-click undo."""
+    backup_root = Path(settings.BACKUP_ROOT).resolve()
+    backup_path = (backup_root / filename).resolve()
+    if (
+        backup_path.parent != backup_root
+        or not backup_path.is_file()
+        or not filename.startswith("lms-deleted-")
+        or backup_path.suffixes != [".tar", ".gz"]
+    ):
+        raise Http404
+
+    try:
+        call_command(
+            "restore_data",
+            str(backup_path),
+            "--yes-i-really-want-to-restore",
+            "--replace",
+            "--replace-media",
+            verbosity=0,
+        )
+    except (CommandError, DatabaseError, OSError) as exc:
+        messages.error(request, f"Không thể khôi phục thao tác vừa xóa: {exc}")
+        return redirect("admin_panel")
+
+    request.session.pop("last_delete_backup", None)
+    messages.success(request, "Đã khôi phục dữ liệu về trước thao tác xóa gần nhất.")
+    return redirect("admin_panel")
 
 
 @login_required

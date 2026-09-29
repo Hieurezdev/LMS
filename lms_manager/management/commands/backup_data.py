@@ -3,7 +3,7 @@
 import json
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from django.conf import settings
@@ -81,6 +81,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Backup created: {archive_path}"))
         if options["keep"] is not None:
             self._remove_old_backups(options["keep"], archive_path)
+        self._remove_expired_pre_delete_backups(created_at)
 
     @staticmethod
     def _all_objects():
@@ -107,3 +108,13 @@ class Command(BaseCommand):
         for old_path in backup_paths[keep:]:
             if old_path != current_path:
                 old_path.unlink()
+
+    @staticmethod
+    def _remove_expired_pre_delete_backups(now):
+        """Keep pre-delete recovery archives for seven days."""
+        cutoff = now - timedelta(days=7)
+        backup_root = Path(settings.BACKUP_ROOT)
+        for backup_path in backup_root.glob("lms-deleted-*.tar.gz"):
+            modified_at = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=timezone.utc)
+            if modified_at < cutoff:
+                backup_path.unlink()
