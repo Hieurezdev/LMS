@@ -51,7 +51,14 @@ class Command(BaseCommand):
 
             management.call_command("migrate", interactive=False, verbosity=0)
             if options["replace"]:
-                management.call_command("flush", interactive=False, verbosity=0)
+                # Do not let flush recreate ContentType rows before the fixture
+                # is loaded; those rows are already included in database.json.
+                management.call_command(
+                    "flush",
+                    interactive=False,
+                    verbosity=0,
+                    inhibit_post_migrate=True,
+                )
             management.call_command("loaddata", str(database_path), verbosity=0)
 
             media_path = extracted_path / "media"
