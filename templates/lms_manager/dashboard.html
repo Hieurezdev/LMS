@@ -117,6 +117,51 @@
     </div>
 </div>
 
+<!-- Student name overview -->
+<div class="row g-4 mb-4">
+    <div class="col-12 col-lg-5">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <h5 class="fw-bold mb-3"><i class="fas fa-user-graduate text-primary me-2"></i>Tổng số học sinh</h5>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr><th>Chỉ số</th><th class="text-end">Số lượng</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Tổng bản ghi học sinh</td><td class="text-end fw-bold">{{ student_count }}</td></tr>
+                        <tr><td>Tên học sinh không trùng</td><td class="text-end fw-bold text-primary">{{ unique_student_name_count }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-secondary mt-3">Số tên duy nhất được tính sau khi bỏ qua khác biệt về khoảng trắng và chữ hoa/chữ thường.</div>
+        </div>
+    </div>
+    <div class="col-12 col-lg-7">
+        <div class="card border-0 shadow-sm rounded-4 p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0"><i class="fas fa-users-between-lines text-warning me-2"></i>Tên trùng ở khác lớp</h5>
+                <span class="badge bg-warning-subtle text-warning-emphasis">{{ duplicate_student_names|length }} tên</span>
+            </div>
+            <div class="table-responsive" style="max-height:260px; overflow-y:auto;">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light"><tr><th>Tên học sinh</th><th class="text-center">Số bản ghi</th><th>Lớp</th></tr></thead>
+                    <tbody>
+                        {% for item in duplicate_student_names %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.name }}</td>
+                            <td class="text-center">{{ item.count }}</td>
+                            <td class="small text-secondary">{{ item.classrooms|join:", " }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-secondary py-3">Chưa có tên trùng ở các lớp khác nhau.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Guided quick actions -->
 <div class="row g-3 mb-4">
     <div class="col-12">

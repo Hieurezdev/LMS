@@ -45,7 +45,7 @@ services:
     command: >
       sh -c "uv run python manage.py migrate --noinput && while true; do
              uv run python manage.py backup_data --keep 2;
-             sleep 3600;
+             sleep 1800;
              done"
     volumes:
       - .:/app

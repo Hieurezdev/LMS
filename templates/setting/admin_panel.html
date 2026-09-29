@@ -77,6 +77,42 @@
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'payment_list' %}"><i class="fas fa-wallet text-warning mb-2"></i><div class="fw-bold text-dark">Giao dịch</div><div class="small text-secondary">Theo dõi các khoản thu</div></a></div>
   </div>
 
+  <div class="card border-danger shadow-sm rounded-4 p-4 mb-5">
+    <div class="d-flex align-items-start gap-3 mb-3">
+      <i class="fas fa-triangle-exclamation text-danger fs-4"></i>
+      <div>
+        <h5 class="fw-bold text-danger mb-1">Xóa dữ liệu hàng loạt</h5>
+        <p class="small text-secondary mb-0">Các thao tác dưới đây xóa vĩnh viễn dữ liệu và không thể hoàn tác. Hãy tạo backup trước khi thực hiện.</p>
+      </div>
+    </div>
+    <div class="row g-2">
+      <div class="col-12 col-md-6 col-xl-3">
+        <form method="post" action="{% url 'classroom_delete_all' %}" onsubmit="return confirm('Bạn có chắc muốn xóa toàn bộ lớp học và học sinh trong lớp không?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger w-100"><i class="fas fa-school me-1"></i>Xóa tất cả lớp học</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <form method="post" action="{% url 'teacher_delete_all' %}" onsubmit="return confirm('Bạn có chắc muốn xóa toàn bộ giảng viên, lớp học và học sinh liên quan không?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger w-100"><i class="fas fa-chalkboard-teacher me-1"></i>Xóa tất cả giảng viên</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <form method="post" action="{% url 'payment_delete_all' %}" onsubmit="return confirm('Bạn có chắc muốn xóa toàn bộ giao dịch học phí không?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger w-100"><i class="fas fa-wallet me-1"></i>Xóa tất cả giao dịch</button>
+        </form>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3">
+        <form method="post" action="{% url 'student_delete_all' %}" onsubmit="return confirm('Bạn có chắc muốn xóa toàn bộ học sinh không?');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger w-100"><i class="fas fa-user-graduate me-1"></i>Xóa tất cả học sinh</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <div class="card border-0 shadow-sm rounded-4 p-4 mb-5">
     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
       <div>

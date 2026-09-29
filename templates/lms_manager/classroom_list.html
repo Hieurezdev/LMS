@@ -111,7 +111,6 @@
             <a href="{% url 'classroom_list_export' %}" class="btn btn-sm btn-outline-success rounded-3">
                 <i class="fas fa-file-excel me-1"></i> Xuất Excel danh sách
             </a>
-            {% if class_reports %}<button type="button" class="btn btn-sm btn-outline-danger rounded-3" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'classroom_delete_all' %}" data-delete-all-label="lớp học và dữ liệu liên quan"><i class="fas fa-trash me-1"></i>Xóa tất cả</button>{% endif %}
         </div>
     </div>
     

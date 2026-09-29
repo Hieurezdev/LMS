@@ -3,6 +3,7 @@ import datetime
 import io
 import json
 import re
+from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from django.conf import settings
@@ -54,6 +55,30 @@ def assign_teacher_to_classroom(teacher, classroom):
 def dashboard_view(request):
     # Overall Counts
     student_count = Student.objects.count()
+    student_name_groups = defaultdict(lambda: {'name': '', 'count': 0, 'classrooms': {}})
+    for student in Student.objects.select_related('classroom').only(
+        'name', 'classroom_id', 'classroom__name'
+    ):
+        normalized_name = ' '.join(student.name.split()).casefold()
+        group = student_name_groups[normalized_name]
+        group['name'] = group['name'] or student.name.strip()
+        group['count'] += 1
+        classroom_name = student.classroom.name if student.classroom else 'Chưa xếp lớp'
+        group['classrooms'][student.classroom_id] = classroom_name
+
+    duplicate_student_names = sorted(
+        (
+            {
+                'name': group['name'],
+                'count': group['count'],
+                'classrooms': sorted(set(group['classrooms'].values()), key=str.casefold),
+            }
+            for group in student_name_groups.values()
+            if len(group['classrooms']) > 1
+        ),
+        key=lambda item: item['name'].casefold(),
+    )
+    unique_student_name_count = len(student_name_groups)
     teacher_count = Teacher.objects.count()
     subject_count = Subject.objects.count()
     class_count = ClassRoom.objects.count()
@@ -162,6 +187,8 @@ def dashboard_view(request):
 
     context = {
         'student_count': student_count,
+        'unique_student_name_count': unique_student_name_count,
+        'duplicate_student_names': duplicate_student_names,
         'teacher_count': teacher_count,
         'subject_count': subject_count,
         'class_count': class_count,

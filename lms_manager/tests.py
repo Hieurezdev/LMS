@@ -68,6 +68,20 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(unpaid.count(), 1)
         self.assertEqual(unpaid.first().student, self.student2)
 
+    def test_dashboard_student_name_totals_and_cross_class_duplicates(self):
+        other_classroom = ClassRoom.objects.create(name='10A2')
+        Student.objects.create(name='John Doe', classroom=other_classroom)
+
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['student_count'], 3)
+        self.assertEqual(response.context['unique_student_name_count'], 2)
+        self.assertEqual(
+            response.context['duplicate_student_names'],
+            [{'name': 'John Doe', 'count': 2, 'classrooms': ['10A1', '10A2']}],
+        )
+
     def test_cashier_can_collect_and_view_unpaid_but_cannot_access_admin_lists(self):
         cashier = get_user_model().objects.create_user(
             username='cashier-test', password='safe-test-password'
