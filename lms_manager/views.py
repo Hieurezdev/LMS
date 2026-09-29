@@ -686,7 +686,7 @@ def teacher_update(request, pk):
 @require_POST
 def teacher_delete(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
-    classrooms = ClassRoom.objects.filter(teachers=teacher).distinct()
+    classrooms = ClassRoom.objects.filter(pk__in=teacher.classes.values('pk'))
     classroom_count = classrooms.count()
     student_count = Student.objects.filter(classroom__in=classrooms).count()
     settlement_count = TeacherSettlement.objects.filter(
@@ -706,7 +706,7 @@ def teacher_delete(request, pk):
 @require_POST
 def teacher_delete_all(request):
     count = Teacher.objects.count()
-    classrooms = ClassRoom.objects.filter(teachers__isnull=False).distinct()
+    classrooms = ClassRoom.objects.filter(pk__in=Teacher.objects.values('classes'))
     classroom_count = classrooms.count()
     student_count = Student.objects.filter(classroom__in=classrooms).count()
     with transaction.atomic():
