@@ -414,17 +414,22 @@ def classroom_update(request, pk):
 
 def classroom_delete(request, pk):
     classroom = get_object_or_404(ClassRoom, pk=pk)
-    classroom.delete()
-    messages.success(request, "Đã xóa lớp học!")
+    student_count = classroom.students.count()
+    with transaction.atomic():
+        TeacherSettlement.objects.filter(classroom=classroom).delete()
+        classroom.delete()
+    messages.success(request, f"Đã xóa lớp học và {student_count} học sinh liên quan!")
     return redirect('classroom_list')
 
 
 @require_POST
 def classroom_delete_all(request):
     count = ClassRoom.objects.count()
-    TeacherSettlement.objects.all().delete()
-    ClassRoom.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} lớp học và dữ liệu liên quan.")
+    student_count = Student.objects.filter(classroom__isnull=False).count()
+    with transaction.atomic():
+        TeacherSettlement.objects.all().delete()
+        ClassRoom.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} lớp học, {student_count} học sinh và dữ liệu liên quan.")
     return redirect('classroom_list')
 
 
@@ -681,13 +686,19 @@ def teacher_update(request, pk):
 @require_POST
 def teacher_delete(request, pk):
     teacher = get_object_or_404(Teacher, pk=pk)
-    settlement_count = TeacherSettlement.objects.filter(teacher=teacher).count()
-    if settlement_count:
-        TeacherSettlement.objects.filter(teacher=teacher).delete()
-    teacher.delete()
+    classrooms = ClassRoom.objects.filter(teachers=teacher).distinct()
+    classroom_count = classrooms.count()
+    student_count = Student.objects.filter(classroom__in=classrooms).count()
+    settlement_count = TeacherSettlement.objects.filter(
+        Q(teacher=teacher) | Q(classroom__in=classrooms)
+    ).count()
+    with transaction.atomic():
+        TeacherSettlement.objects.filter(Q(teacher=teacher) | Q(classroom__in=classrooms)).delete()
+        classrooms.delete()
+        teacher.delete()
     messages.success(
         request,
-        f"Đã xóa giảng viên và {settlement_count} dữ liệu quyết toán liên quan.",
+        f"Đã xóa giảng viên, {classroom_count} lớp học, {student_count} học sinh và {settlement_count} dữ liệu quyết toán liên quan.",
     )
     return redirect('teacher_list')
 
@@ -695,10 +706,15 @@ def teacher_delete(request, pk):
 @require_POST
 def teacher_delete_all(request):
     count = Teacher.objects.count()
-    TeacherSettlement.objects.all().delete()
-    PaymentBatch.objects.all().delete()
-    Teacher.objects.all().delete()
-    messages.success(request, f"Đã xóa {count} giảng viên và dữ liệu liên quan.")
+    classrooms = ClassRoom.objects.filter(teachers__isnull=False).distinct()
+    classroom_count = classrooms.count()
+    student_count = Student.objects.filter(classroom__in=classrooms).count()
+    with transaction.atomic():
+        TeacherSettlement.objects.all().delete()
+        PaymentBatch.objects.all().delete()
+        classrooms.delete()
+        Teacher.objects.all().delete()
+    messages.success(request, f"Đã xóa {count} giảng viên, {classroom_count} lớp học, {student_count} học sinh và dữ liệu liên quan.")
     return redirect('teacher_list')
 
 

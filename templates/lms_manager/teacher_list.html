@@ -15,7 +15,7 @@
       <a href="{% url 'teacher_add' %}" class="btn btn-primary">
         <i class="fas fa-plus"></i> Thêm giảng viên
       </a>
-      {% if teachers %}<button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'teacher_delete_all' %}" data-delete-all-label="giảng viên và dữ liệu liên quan"><i class="fas fa-trash"></i> Xóa tất cả</button>{% endif %}
+      {% if teachers %}<button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#delete-all-modal" data-delete-all-url="{% url 'teacher_delete_all' %}" data-delete-all-label="giảng viên, lớp học, học sinh và dữ liệu liên quan"><i class="fas fa-trash"></i> Xóa tất cả</button>{% endif %}
     </div>
   </div>
 
@@ -156,7 +156,7 @@
       </div>
       <div class="modal-body">
         <p class="mb-2">Bạn có muốn xóa giảng viên <strong id="teacher-delete-name"></strong> không?</p>
-        <div class="alert alert-warning mb-0 small"><i class="fas fa-info-circle me-1"></i>Toàn bộ phân công lớp, học phí và dữ liệu quyết toán liên quan cũng sẽ bị xóa.</div>
+        <div class="alert alert-warning mb-0 small"><i class="fas fa-info-circle me-1"></i>Toàn bộ lớp học do giảng viên phụ trách, học sinh trong các lớp đó, học phí và dữ liệu quyết toán liên quan cũng sẽ bị xóa.</div>
       </div>
       <div class="modal-footer border-top">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>

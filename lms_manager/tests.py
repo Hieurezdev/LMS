@@ -145,7 +145,17 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Teacher.objects.filter(pk=self.teacher.id).exists())
         self.assertFalse(TeacherSettlement.objects.filter(pk=settlement.pk).exists())
+        self.assertFalse(ClassRoom.objects.filter(pk=self.classroom.pk).exists())
+        self.assertFalse(Student.objects.filter(pk=self.student1.pk).exists())
         self.assertContains(response, 'Đã xóa giảng viên')
+
+    def test_classroom_delete_all_removes_students_in_classrooms(self):
+        with translation.override('en'):
+            response = self.client.post(reverse('classroom_delete_all'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ClassRoom.objects.count(), 0)
+        self.assertEqual(Student.objects.count(), 0)
 
     def test_teacher_without_settlement_can_be_deleted(self):
         teacher = Teacher.objects.create(name='Temporary teacher')
