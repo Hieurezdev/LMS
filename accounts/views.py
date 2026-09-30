@@ -1,6 +1,7 @@
 import json
 import tarfile
 import tempfile
+import unicodedata
 from datetime import datetime, timezone as datetime_timezone
 from pathlib import Path
 
@@ -8,10 +9,12 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import DatabaseError
+from django.db.models import Prefetch
 from django.db import transaction
 from django.http import FileResponse, Http404
 from django.http.response import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.contrib import messages
@@ -60,43 +63,127 @@ def public_payment_request(request):
             form.save()
             return render(request, "accounts/payment_request_success.html")
     else:
-        form = PublicPaymentRequestForm()
+        form = PublicPaymentRequestForm(initial={"payment_method": "cash"})
     return render(request, "accounts/payment_request.html", {"form": form})
+
+
+def _normalized_search_text(value):
+    normalized = unicodedata.normalize("NFD", value.casefold())
+    return "".join(char for char in normalized if not unicodedata.combining(char)).replace("đ", "d")
+
+
+@require_POST
+def public_payment_student_search(request):
+    query = " ".join(request.POST.get("query", "").split())[:80]
+    if len(query) < 3:
+        return JsonResponse({"students": []})
+
+    now = timezone.now().timestamp()
+    window_start, request_count = request.session.get("payment_search_window", (now, 0))
+    if now - window_start >= 60:
+        window_start, request_count = now, 0
+    if request_count >= 60:
+        return JsonResponse({"error": "Bạn tìm kiếm quá nhanh. Vui lòng thử lại sau một phút."}, status=429)
+    request.session["payment_search_window"] = (window_start, request_count + 1)
+
+    candidates = list(
+        Student.objects.filter(classroom__isnull=False, name__icontains=query)
+        .select_related("classroom")
+        .order_by("name", "pk")[:8]
+    )
+    if len(candidates) < 8:
+        seen_ids = {student.pk for student in candidates}
+        normalized_query = _normalized_search_text(query)
+        for student in Student.objects.filter(classroom__isnull=False).select_related("classroom").order_by("name", "pk").iterator():
+            if student.pk not in seen_ids and normalized_query in _normalized_search_text(student.name):
+                candidates.append(student)
+                seen_ids.add(student.pk)
+                if len(candidates) == 8:
+                    break
+
+    student_ids = [student.pk for student in candidates]
+    students_by_id = {
+        student.pk: student
+        for student in Student.objects.filter(pk__in=student_ids).select_related("classroom").prefetch_related(
+            Prefetch("enrollments", queryset=Enrollment.objects.select_related("teacher", "subject")),
+            Prefetch("payments", queryset=Payment.objects.select_related("payment_period")),
+        )
+    }
+    results = []
+    for student_id in student_ids:
+        student = students_by_id[student_id]
+        paid = {(payment.teacher_id, payment.payment_period.name) for payment in student.payments.all()}
+        enrollments = [
+            {
+                "id": enrollment.pk,
+                "teacher": enrollment.teacher.name,
+                "subject": enrollment.subject.name,
+                "unpaid_periods": [
+                    number for number in range(1, 9)
+                    if (enrollment.teacher_id, f"Đợt {number}") not in paid
+                ],
+            }
+            for enrollment in student.enrollments.all()
+        ]
+        if enrollments:
+            results.append({
+                "id": student.pk,
+                "name": student.name,
+                "classroom": student.classroom.name,
+                "enrollments": enrollments,
+            })
+    return JsonResponse({"students": results})
 
 
 @login_required
 @admin_required
 def payment_request_queue(request):
     requests = PaymentRequest.objects.select_related("reviewed_by", "payment").all()
-    return render(request, "setting/payment_request_queue.html", {"payment_requests": requests})
+    return render(request, "setting/payment_request_queue.html", {
+        "payment_requests": requests,
+        "breadcrumb_items": [
+            {"label": "Giao dịch đóng tiền", "url": reverse("payment_list")},
+            {"label": "Hàng chờ giao dịch"},
+        ],
+    })
 
 
 @login_required
 @admin_required
 @require_POST
+@transaction.atomic
 def approve_payment_request(request, pk):
     payment_request = get_object_or_404(
-        PaymentRequest, pk=pk, status=PaymentRequest.STATUS_PENDING
+        PaymentRequest.objects.select_for_update(),
+        pk=pk,
+        status=PaymentRequest.STATUS_PENDING,
     )
-    students = Student.objects.filter(
-        name__iexact=payment_request.student_name.strip(),
-        classroom__name__iexact=payment_request.classroom_name.strip(),
-    )
-    if students.count() != 1:
-        messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
-        return redirect("payment_request_queue")
-
-    student = students.first()
-    enrollments = Enrollment.objects.filter(
-        student=student,
-        subject__name__iexact=payment_request.subject_name.strip(),
-        teacher__name__iexact=payment_request.teacher_name.strip(),
-    ).select_related("subject", "teacher")
-    if enrollments.count() != 1:
-        messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
-        return redirect("payment_request_queue")
-
-    enrollment = enrollments.first()
+    if payment_request.enrollment_id:
+        enrollment = Enrollment.objects.select_related("student__classroom", "subject", "teacher").filter(
+            pk=payment_request.enrollment_id
+        ).first()
+        if enrollment is None or enrollment.student.classroom is None:
+            messages.error(request, "Không thể xác nhận: đăng ký học không còn hợp lệ.")
+            return redirect("payment_request_queue")
+        student = enrollment.student
+    else:
+        students = Student.objects.filter(
+            name__iexact=payment_request.student_name.strip(),
+            classroom__name__iexact=payment_request.classroom_name.strip(),
+        )
+        if students.count() != 1:
+            messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
+            return redirect("payment_request_queue")
+        student = students.first()
+        enrollments = Enrollment.objects.filter(
+            student=student,
+            subject__name__iexact=payment_request.subject_name.strip(),
+            teacher__name__iexact=payment_request.teacher_name.strip(),
+        ).select_related("subject", "teacher")
+        if enrollments.count() != 1:
+            messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
+            return redirect("payment_request_queue")
+        enrollment = enrollments.first()
     period, _ = PaymentPeriod.objects.get_or_create(
         name=payment_request.payment_period_name.strip(),
         teacher=enrollment.teacher,
@@ -108,21 +195,20 @@ def approve_payment_request(request, pk):
         messages.error(request, "Học sinh này đã có giao dịch cho đợt thu đã chọn.")
         return redirect("payment_request_queue")
 
-    with transaction.atomic():
-        payment = Payment.objects.create(
-            student=student,
-            classroom=student.classroom,
-            subject=enrollment.subject,
-            teacher=enrollment.teacher,
-            payment_period=period,
-            amount=payment_request.amount,
-            payment_method=payment_request.payment_method,
-        )
-        payment_request.payment = payment
-        payment_request.status = PaymentRequest.STATUS_APPROVED
-        payment_request.reviewed_by = request.user
-        payment_request.reviewed_at = timezone.now()
-        payment_request.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
+    payment = Payment.objects.create(
+        student=student,
+        classroom=student.classroom,
+        subject=enrollment.subject,
+        teacher=enrollment.teacher,
+        payment_period=period,
+        amount=payment_request.amount,
+        payment_method=payment_request.payment_method,
+    )
+    payment_request.payment = payment
+    payment_request.status = PaymentRequest.STATUS_APPROVED
+    payment_request.reviewed_by = request.user
+    payment_request.reviewed_at = timezone.now()
+    payment_request.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
 
     messages.success(request, "Đã xác nhận yêu cầu và tạo giao dịch học phí.")
     return redirect("payment_request_queue")

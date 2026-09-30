@@ -1,36 +1,85 @@
 {% extends 'base.html' %}
+{% load humanize %}
 
-{% block title %}Yêu cầu thu học phí{% endblock %}
+{% block title %}Hàng chờ giao dịch{% endblock %}
 
 {% block content %}
 <div class="container-fluid pt-3">
-  <div class="page-header d-flex justify-content-between align-items-center gap-3 flex-wrap">
-    <div><h1>Yêu cầu thu học phí</h1><p>Kiểm tra yêu cầu từ mã QR trước khi tạo giao dịch chính thức.</p></div>
-    <a class="btn btn-outline-secondary" href="{% url 'admin_panel' %}">Quay lại quản trị</a>
+  {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
+
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Hàng chờ giao dịch</h1>
+      <p>Kiểm tra yêu cầu thu học phí trước khi ghi nhận giao dịch</p>
+    </div>
+    <div class="page-header-actions">
+      <a class="btn btn-outline-secondary" href="{% url 'payment_list' %}">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i> Giao dịch học phí
+      </a>
+    </div>
   </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
   <div class="table-card">
+    <div class="table-card-header">
+      <div class="table-card-title"><i class="fas fa-hourglass-half" aria-hidden="true"></i> Danh sách yêu cầu</div>
+      <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payment_requests|length }} yêu cầu</span>
+    </div>
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light"><tr><th>Thời gian</th><th>Học sinh</th><th>Lớp / Môn</th><th>Giảng viên / Đợt</th><th>Số tiền</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr></thead>
-        <tbody>
-        {% for item in payment_requests %}
+      <table class="lms-table" style="min-width: 900px;">
+        <thead>
           <tr>
-            <td>{{ item.created_at|date:'d/m/Y H:i' }}</td>
+            <th>Học sinh</th>
+            <th>Lớp / Môn</th>
+            <th>Giảng viên / Đợt</th>
+            <th>Thời gian</th>
+            <th class="text-end">Số tiền</th>
+            <th>Trạng thái</th>
+            <th class="text-end">Hành động</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in payment_requests %}
+          <tr>
             <td><strong>{{ item.student_name }}</strong><br><small class="text-secondary">{{ item.payer_phone }}</small></td>
             <td>{{ item.classroom_name }}<br><small class="text-secondary">{{ item.subject_name }}</small></td>
             <td>{{ item.teacher_name }}<br><small class="text-secondary">{{ item.payment_period_name }}</small></td>
-            <td class="fw-semibold">{{ item.amount|floatformat:0 }} VNĐ</td>
-            <td><span class="badge {% if item.status == 'pending' %}bg-warning text-dark{% elif item.status == 'approved' %}bg-success{% else %}bg-danger{% endif %}">{{ item.get_status_display }}</span></td>
+            <td class="text-secondary small">{{ item.created_at|date:'d/m/Y H:i' }}</td>
+            <td class="text-end fw-bold text-success">{{ item.amount|floatformat:0|intcomma }} VNĐ</td>
+            <td>
+              <span class="status-badge {% if item.status == 'pending' %}bg-warning text-dark{% elif item.status == 'approved' %}status-paid{% else %}status-unpaid{% endif %}">
+                {{ item.get_status_display }}
+              </span>
+            </td>
             <td class="text-end">
               {% if item.status == 'pending' %}
-              <form method="post" action="{% url 'approve_payment_request' item.id %}" class="d-inline" onsubmit="return confirm('Xác nhận và tạo giao dịch học phí cho yêu cầu này?');">{% csrf_token %}<button class="btn btn-success btn-sm">Duyệt</button></form>
-              <form method="post" action="{% url 'reject_payment_request' item.id %}" class="d-inline" onsubmit="return confirm('Từ chối yêu cầu này?');">{% csrf_token %}<button class="btn btn-outline-danger btn-sm">Từ chối</button></form>
+                <div class="d-flex justify-content-end gap-1">
+                  <form method="post" action="{% url 'approve_payment_request' item.id %}" onsubmit="return confirm('Xác nhận và tạo giao dịch học phí cho yêu cầu này?');">
+                    {% csrf_token %}<button type="submit" class="btn btn-success btn-xs">Duyệt</button>
+                  </form>
+                  <form method="post" action="{% url 'reject_payment_request' item.id %}" onsubmit="return confirm('Từ chối yêu cầu này?');">
+                    {% csrf_token %}<button type="submit" class="btn btn-outline-danger btn-xs">Từ chối</button>
+                  </form>
+                </div>
               {% else %}<small class="text-secondary">{{ item.reviewed_at|date:'d/m/Y H:i' }}</small>{% endif %}
             </td>
           </tr>
-        {% empty %}
-          <tr><td colspan="7" class="text-center text-secondary py-4">Chưa có yêu cầu nào.</td></tr>
-        {% endfor %}
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5" style="color:#94A3B8;">
+              <i class="fas fa-hourglass-half fa-2x mb-2 d-block" style="color:#E2E8F0;" aria-hidden="true"></i>
+              Chưa có yêu cầu nào
+            </td>
+          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>

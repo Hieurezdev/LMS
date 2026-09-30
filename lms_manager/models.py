@@ -299,6 +299,14 @@ class PaymentRequest(models.Model):
     )
 
     PAYMENT_METHOD_CHOICES = Payment.PAYMENT_METHOD_CHOICES
+    enrollment = models.ForeignKey(
+        Enrollment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_requests",
+        verbose_name="Đăng ký học được chọn",
+    )
     student_name = models.CharField(max_length=150, verbose_name="Tên học sinh")
     classroom_name = models.CharField(max_length=150, verbose_name="Lớp học")
     subject_name = models.CharField(max_length=150, verbose_name="Môn học")

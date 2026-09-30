@@ -9,6 +9,7 @@ from lms_manager.models import (
     ClassRoom,
     Enrollment,
     Payment,
+    PaymentPeriod,
     PaymentRequest,
     Student,
     Subject,
@@ -33,16 +34,49 @@ class PaymentRequestFlowTests(TestCase):
         teacher.subjects.add(subject)
         teacher.classes.add(classroom)
         student = Student.objects.create(name="Nguyễn Văn A", classroom=classroom)
-        Enrollment.objects.create(student=student, teacher=teacher, subject=subject)
+        self.enrollment = Enrollment.objects.create(student=student, teacher=teacher, subject=subject)
         self.student = student
+
+    def test_search_finds_student_and_only_unpaid_periods(self):
+        with translation.override("en"):
+            search_url = reverse("public_payment_student_search")
+            self.assertEqual(self.client.post(search_url, {"query": "Ng"}).json()["students"], [])
+            response = self.client.post(search_url, {"query": "Nguyen"})
+        self.assertEqual(response.status_code, 200)
+        student = response.json()["students"][0]
+        self.assertEqual(student["name"], "Nguyễn Văn A")
+        self.assertEqual(student["classroom"], "10A1")
+        self.assertEqual(student["enrollments"][0]["id"], self.enrollment.pk)
+        self.assertIn(1, student["enrollments"][0]["unpaid_periods"])
+
+        period = PaymentPeriod.objects.create(
+            name="Đợt 1", teacher=self.enrollment.teacher, subject=self.enrollment.subject
+        )
+        Payment.objects.bulk_create([Payment(
+            student=self.student,
+            classroom=self.student.classroom,
+            subject=self.enrollment.subject,
+            teacher=self.enrollment.teacher,
+            payment_period=period,
+            amount=125000,
+        )])
+        with translation.override("en"):
+            response = self.client.post(search_url, {"query": "Nguyen"})
+        self.assertNotIn(1, response.json()["students"][0]["enrollments"][0]["unpaid_periods"])
 
     def test_public_submission_waits_for_admin_approval(self):
         with translation.override("en"):
             public_url = reverse("public_payment_request")
             queue_url = reverse("payment_request_queue")
 
-            self.assertEqual(self.client.get(public_url).status_code, 200)
+            page = self.client.get(public_url)
+            self.assertEqual(page.status_code, 200)
+            payment_method = page.context["form"]["payment_method"]
+            self.assertEqual(payment_method.value(), "cash")
+            self.assertEqual(next(iter(payment_method.field.choices))[0], "cash")
             response = self.client.post(public_url, {
+                "student_id": self.student.pk,
+                "enrollment": self.enrollment.pk,
                 "student_name": "Nguyễn Văn A",
                 "classroom_name": "10A1",
                 "subject_name": "Toán",
@@ -56,6 +90,7 @@ class PaymentRequestFlowTests(TestCase):
             self.assertEqual(response.status_code, 200)
             payment_request = PaymentRequest.objects.get()
             self.assertEqual(payment_request.status, PaymentRequest.STATUS_PENDING)
+            self.assertEqual(payment_request.enrollment_id, self.enrollment.pk)
             self.assertEqual(Payment.objects.count(), 0)
 
             self.assertEqual(self.client.get(queue_url).status_code, 302)
@@ -72,6 +107,21 @@ class PaymentRequestFlowTests(TestCase):
             self.assertEqual(Payment.objects.count(), 1)
             self.assertEqual(payment_request.payment.student, self.student)
             self.assertTrue(payment_request.payment.receipt_pdf)
+
+    def test_submission_rejects_an_unselected_student(self):
+        with translation.override("en"):
+            response = self.client.post(reverse("public_payment_request"), {
+                "student_name": "Nguyễn Văn A",
+                "classroom_name": "10A1",
+                "subject_name": "Toán",
+                "teacher_name": "Cô Lan",
+                "payment_period_name": "Đợt 1",
+                "amount": "125000",
+                "payment_method": "cash",
+                "payer_phone": "0900000000",
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PaymentRequest.objects.count(), 0)
 
     def test_rejected_request_creates_no_payment(self):
         payment_request = PaymentRequest.objects.create(
