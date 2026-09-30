@@ -24,6 +24,13 @@
           <span>Dashboard</span>
         </a>
       </li>
+      <li class="{% if request.resolver_match.url_name == 'payment_request_queue' %}active{% endif %}">
+        <a href="{% url 'payment_request_queue' %}">
+          <span class="nav-icon"><i class="fas fa-hourglass-half"></i></span>
+          <span>Hàng chờ giao dịch</span>
+          {% if pending_payment_request_count %}<span class="badge bg-warning text-dark ms-auto">{{ pending_payment_request_count }}</span>{% endif %}
+        </a>
+      </li>
       <li class="{% if 'cong-no' in request.path %}active{% endif %}">
         <a href="{% url 'debt_dashboard' %}">
           <span class="nav-icon"><i class="fas fa-exclamation-circle"></i></span>
@@ -68,13 +75,6 @@
         <a href="{% url 'payment_list' %}">
           <span class="nav-icon"><i class="fas fa-wallet"></i></span>
           <span>Giao dịch</span>
-        </a>
-      </li>
-      <li class="{% if request.resolver_match.url_name == 'payment_request_queue' %}active{% endif %}">
-        <a href="{% url 'payment_request_queue' %}">
-          <span class="nav-icon"><i class="fas fa-hourglass-half"></i></span>
-          <span>Hàng chờ giao dịch</span>
-          {% if pending_payment_request_count %}<span class="badge bg-warning text-dark ms-auto">{{ pending_payment_request_count }}</span>{% endif %}
         </a>
       </li>
       {% endif %}
