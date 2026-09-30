@@ -110,26 +110,6 @@
                 </div>
               </div>
             </div>
-            <div class="mt-4">
-              <h2 class="h6 fw-bold mb-3">Thông tin liên hệ và đối chiếu</h2>
-              <div class="row g-3">
-                <div class="col-12 col-md-6">
-                  <label for="{{ form.payer_phone.id_for_label }}" class="form-label fw-semibold small">Số điện thoại liên hệ</label>
-                  {{ form.payer_phone }}
-                  {% for error in form.payer_phone.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-12 col-md-6">
-                  <label for="{{ form.transaction_reference.id_for_label }}" class="form-label fw-semibold small">Mã giao dịch (nếu có)</label>
-                  {{ form.transaction_reference }}
-                  {% for error in form.transaction_reference.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
-                </div>
-                <div class="col-12">
-                  <label for="{{ form.note.id_for_label }}" class="form-label fw-semibold small">Ghi chú (nếu có)</label>
-                  {{ form.note }}
-                  {% for error in form.note.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
-                </div>
-              </div>
-            </div>
             <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top payment-create-actions public-payment-actions">
               <div class="small text-secondary">Nhân viên sẽ kiểm tra trước khi xác nhận.</div>
               <div class="text-end"><div class="text-secondary small">Số tiền yêu cầu</div><div id="request-total" class="fw-bold text-success fs-5" aria-live="polite">0 VNĐ</div></div>

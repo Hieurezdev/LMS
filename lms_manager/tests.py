@@ -8,7 +8,7 @@ from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import translation
-from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, TeacherSettlement
+from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, PaymentRequest, TeacherSettlement
 from lms_manager.views import assign_teacher_to_classroom, sort_students_by_given_name
 
 
@@ -548,6 +548,7 @@ class LMSManagerQueryTest(TestCase):
         self.assertTrue(response.json()['success'])
         batch = PaymentBatch.objects.get()
         self.assertEqual(batch.payments.count(), 2)
+        self.assertEqual(PaymentRequest.objects.count(), 0)
         self.assertEqual(
             set(batch.payments.values_list('payment_period__name', flat=True)),
             {'Đợt 1', 'Đợt 2'},

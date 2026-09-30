@@ -146,9 +146,6 @@ class PublicPaymentRequestForm(forms.ModelForm):
             "payment_period_name",
             "amount",
             "payment_method",
-            "payer_phone",
-            "transaction_reference",
-            "note",
         )
         labels = {
             "student_name": "Tên học sinh",
@@ -158,15 +155,11 @@ class PublicPaymentRequestForm(forms.ModelForm):
             "payment_period_name": "Đợt thu",
             "amount": "Số tiền",
             "payment_method": "Hình thức thanh toán",
-            "payer_phone": "Số điện thoại liên hệ",
-            "transaction_reference": "Mã giao dịch (nếu có)",
-            "note": "Ghi chú",
         }
         widgets = {
             "enrollment": forms.HiddenInput(),
             "teacher_name": forms.HiddenInput(),
             "amount": forms.NumberInput(attrs={"min": 1, "step": 1}),
-            "note": forms.Textarea(attrs={"rows": 3}),
         }
 
     def __init__(self, *args, **kwargs):
