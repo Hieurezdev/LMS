@@ -10,6 +10,7 @@ from lms_manager.models import (
     ClassRoom,
     Enrollment,
     Payment,
+    PaymentBatch,
     PaymentPeriod,
     PaymentRequest,
     Student,
@@ -106,6 +107,8 @@ class PaymentRequestFlowTests(TestCase):
             payment_request.refresh_from_db()
             self.assertEqual(payment_request.status, PaymentRequest.STATUS_APPROVED)
             self.assertEqual(Payment.objects.count(), 1)
+            batch = PaymentBatch.objects.get()
+            self.assertEqual(batch.payments.count(), 1)
             self.assertEqual(payment_request.payment.student, self.student)
             self.assertTrue(payment_request.payment.receipt_pdf)
 
@@ -193,6 +196,23 @@ class PaymentRequestFlowTests(TestCase):
             {"Cô Lan", "Thầy Minh"},
         )
         self.assertEqual(Payment.objects.count(), 0)
+        self.client.force_login(self.admin)
+        first_request = PaymentRequest.objects.order_by("pk").first()
+        approve_response = self.client.post(
+            reverse("approve_payment_request", args=[first_request.pk])
+        )
+        self.assertEqual(approve_response.status_code, 302)
+        self.assertEqual(Payment.objects.count(), 2)
+        self.assertEqual(PaymentBatch.objects.count(), 1)
+        batch = PaymentBatch.objects.get()
+        self.assertEqual(
+            approve_response.url,
+            reverse("payment_batch_receipt", args=[batch.pk]),
+        )
+        self.assertEqual(
+            PaymentRequest.objects.filter(status=PaymentRequest.STATUS_APPROVED).count(),
+            2,
+        )
 
     def test_rejected_request_creates_no_payment(self):
         payment_request = PaymentRequest.objects.create(

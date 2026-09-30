@@ -6,6 +6,7 @@ from django.conf import settings
 from io import BytesIO
 from xhtml2pdf import pisa
 import os
+import uuid
 
 def link_callback(uri, rel):
     """
@@ -299,6 +300,12 @@ class PaymentRequest(models.Model):
     )
 
     PAYMENT_METHOD_CHOICES = Payment.PAYMENT_METHOD_CHOICES
+    request_group = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        db_index=True,
+        verbose_name="Nhóm yêu cầu",
+    )
     enrollment = models.ForeignKey(
         Enrollment,
         on_delete=models.SET_NULL,

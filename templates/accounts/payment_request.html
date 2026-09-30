@@ -83,7 +83,7 @@
                 </div>
                 <div class="col-12 col-md-6">
                   <label for="teacher-choice" class="form-label fw-semibold small">Giảng viên</label>
-                  <select id="teacher-choice" class="form-select" disabled><option value="">Chọn giảng viên</option></select>
+                  <select id="teacher-choice" class="form-select teacher-choice" disabled><option value="">Chọn giảng viên</option></select>
                   {% for error in form.enrollment.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
                 </div>
                 <div class="col-12 col-md-6">
@@ -127,6 +127,6 @@
       </div>
     </div>
   </main>
-  <script src="{% static 'js/public_payment_request.js' %}?v=20260930-2" defer></script>
+  <script src="{% static 'js/public_payment_request.js' %}?v=20260930-3" defer></script>
 </body>
 </html>

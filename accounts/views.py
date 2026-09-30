@@ -2,6 +2,7 @@ import json
 import tarfile
 import tempfile
 import unicodedata
+import uuid
 from datetime import datetime, timezone as datetime_timezone
 from pathlib import Path
 
@@ -31,7 +32,7 @@ from .forms import (
     PublicPaymentRequestForm,
 )
 from .models import User
-from lms_manager.models import Enrollment, Payment, PaymentPeriod, PaymentRequest, Student
+from lms_manager.models import Enrollment, Payment, PaymentBatch, PaymentPeriod, PaymentRequest, Student
 
 
 class RoleLoginView(LoginView):
@@ -103,9 +104,11 @@ def public_payment_request(request):
                 return render(request, "accounts/payment_request.html", {"form": form})
 
             with transaction.atomic():
+                request_group = uuid.uuid4()
                 for data in cleaned_requests:
                     for period_name in data["payment_period_name"]:
                         PaymentRequest.objects.create(
+                            request_group=request_group,
                             enrollment=data["enrollment"],
                             student_name=data["student_name"],
                             classroom_name=data["classroom_name"],
@@ -121,8 +124,10 @@ def public_payment_request(request):
         if form.is_valid():
             data = form.cleaned_data
             with transaction.atomic():
+                request_group = uuid.uuid4()
                 for period_name in data["payment_period_name"]:
                     PaymentRequest.objects.create(
+                        request_group=request_group,
                         enrollment=data["enrollment"],
                         student_name=data["student_name"],
                         classroom_name=data["classroom_name"],
@@ -229,60 +234,73 @@ def approve_payment_request(request, pk):
         pk=pk,
         status=PaymentRequest.STATUS_PENDING,
     )
-    if payment_request.enrollment_id:
-        enrollment = Enrollment.objects.select_related("student__classroom", "subject", "teacher").filter(
-            pk=payment_request.enrollment_id
-        ).first()
-        if enrollment is None or enrollment.student.classroom is None:
-            messages.error(request, "Không thể xác nhận: đăng ký học không còn hợp lệ.")
-            return redirect("payment_request_queue")
-        student = enrollment.student
-    else:
-        students = Student.objects.filter(
-            name__iexact=payment_request.student_name.strip(),
-            classroom__name__iexact=payment_request.classroom_name.strip(),
+    grouped_requests = list(
+        PaymentRequest.objects.select_for_update()
+        .filter(request_group=payment_request.request_group, status=PaymentRequest.STATUS_PENDING)
+        .order_by("created_at", "pk")
+    )
+    payments = []
+    for item in grouped_requests:
+        if item.enrollment_id:
+            enrollment = Enrollment.objects.select_related(
+                "student__classroom", "subject", "teacher"
+            ).filter(pk=item.enrollment_id).first()
+            if enrollment is None or enrollment.student.classroom is None:
+                messages.error(request, "Không thể xác nhận: đăng ký học không còn hợp lệ.")
+                return redirect("payment_request_queue")
+            student = enrollment.student
+        else:
+            students = Student.objects.filter(
+                name__iexact=item.student_name.strip(),
+                classroom__name__iexact=item.classroom_name.strip(),
+            )
+            if students.count() != 1:
+                messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
+                return redirect("payment_request_queue")
+            student = students.first()
+            enrollments = Enrollment.objects.filter(
+                student=student,
+                subject__name__iexact=item.subject_name.strip(),
+                teacher__name__iexact=item.teacher_name.strip(),
+            ).select_related("subject", "teacher")
+            if enrollments.count() != 1:
+                messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
+                return redirect("payment_request_queue")
+            enrollment = enrollments.first()
+        period, _ = PaymentPeriod.objects.get_or_create(
+            name=item.payment_period_name.strip(),
+            teacher=enrollment.teacher,
+            subject=enrollment.subject,
         )
-        if students.count() != 1:
-            messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
+        if Payment.objects.filter(
+            student=student, teacher=enrollment.teacher, payment_period=period
+        ).exists():
+            messages.error(request, "Học sinh này đã có giao dịch cho một đợt thu trong nhóm.")
             return redirect("payment_request_queue")
-        student = students.first()
-        enrollments = Enrollment.objects.filter(
+        payments.append(Payment.objects.create(
             student=student,
-            subject__name__iexact=payment_request.subject_name.strip(),
-            teacher__name__iexact=payment_request.teacher_name.strip(),
-        ).select_related("subject", "teacher")
-        if enrollments.count() != 1:
-            messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
-            return redirect("payment_request_queue")
-        enrollment = enrollments.first()
-    period, _ = PaymentPeriod.objects.get_or_create(
-        name=payment_request.payment_period_name.strip(),
-        teacher=enrollment.teacher,
-        subject=enrollment.subject,
-    )
-    if Payment.objects.filter(
-        student=student, teacher=enrollment.teacher, payment_period=period
-    ).exists():
-        messages.error(request, "Học sinh này đã có giao dịch cho đợt thu đã chọn.")
-        return redirect("payment_request_queue")
+            classroom=student.classroom,
+            subject=enrollment.subject,
+            teacher=enrollment.teacher,
+            payment_period=period,
+            amount=item.amount,
+            payment_method=item.payment_method,
+        ))
+        item.payment = payments[-1]
+        item.status = PaymentRequest.STATUS_APPROVED
+        item.reviewed_by = request.user
+        item.reviewed_at = timezone.now()
 
-    payment = Payment.objects.create(
-        student=student,
-        classroom=student.classroom,
-        subject=enrollment.subject,
-        teacher=enrollment.teacher,
-        payment_period=period,
-        amount=payment_request.amount,
-        payment_method=payment_request.payment_method,
+    for item in grouped_requests:
+        item.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
+    batch = PaymentBatch.objects.create(
+        payment_date=timezone.localdate(),
+        created_by=request.user,
     )
-    payment_request.payment = payment
-    payment_request.status = PaymentRequest.STATUS_APPROVED
-    payment_request.reviewed_by = request.user
-    payment_request.reviewed_at = timezone.now()
-    payment_request.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
-
-    messages.success(request, "Đã xác nhận yêu cầu và tạo giao dịch học phí.")
-    return redirect("payment_request_queue")
+    batch.payments.add(*payments)
+    batch.generate_receipt_pdf()
+    messages.success(request, f"Đã xác nhận {len(payments)} khoản thu và tạo phiếu thu tổng.")
+    return redirect("payment_batch_receipt", pk=batch.pk)
 
 
 @login_required
