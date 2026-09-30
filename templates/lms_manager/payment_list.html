@@ -36,6 +36,14 @@
       </div>
       <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payments|length }} giao dịch</span>
     </div>
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-center px-3 pt-3">
+      <div class="input-group" style="max-width:520px;">
+        <span class="input-group-text bg-white"><i class="fas fa-search text-secondary"></i></span>
+        <input type="search" name="q" value="{{ payment_query }}" class="form-control" placeholder="Tìm học sinh, lớp, môn, giảng viên, đợt thu..." aria-label="Tìm kiếm giao dịch">
+        <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+      </div>
+      {% if payment_query %}<a href="{% url 'payment_list' %}" class="btn btn-outline-secondary">Xóa tìm kiếm</a>{% endif %}
+    </form>
     <form method="post" action="{% url 'payment_batch_create' %}" id="payment-batch-form">
       {% csrf_token %}
       <div class="d-flex justify-content-end px-3 pt-3">

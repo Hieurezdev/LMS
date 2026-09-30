@@ -104,6 +104,23 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '100,000')
 
+    def test_payment_list_searches_by_payment_details(self):
+        other_student = Student.objects.create(name='Other Student', classroom=self.classroom)
+        Payment.objects.create(
+            student=other_student,
+            classroom=self.classroom,
+            subject=self.subject,
+            teacher=self.teacher,
+            payment_period=self.payment_period,
+            amount=200000,
+        )
+
+        with translation.override('en'):
+            response = self.client.get(reverse('payment_list'), {'q': 'Other Student'})
+
+        self.assertContains(response, 'Other Student')
+        self.assertNotContains(response, self.student1.name)
+
     def test_teacher_list_searches_by_name_and_phone(self):
         other_teacher = Teacher.objects.create(name='Ms. Jones', phone='0988111222')
 

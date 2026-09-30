@@ -1323,8 +1323,21 @@ def enrollment_delete(request, pk):
 # PAYMENT & BILLING CRUD
 # -------------------------------------------------------------
 def payment_list(request):
-    payments = Payment.objects.all().order_by('-payment_date', '-id')
-    return render(request, 'lms_manager/payment_list.html', {'payments': payments})
+    query = request.GET.get('q', '').strip()
+    payments = Payment.objects.all()
+    if query:
+        payments = payments.filter(
+            Q(student__name__icontains=query)
+            | Q(classroom__name__icontains=query)
+            | Q(subject__name__icontains=query)
+            | Q(teacher__name__icontains=query)
+            | Q(payment_period__name__icontains=query)
+        )
+    payments = payments.order_by('-payment_date', '-id')
+    return render(request, 'lms_manager/payment_list.html', {
+        'payments': payments,
+        'payment_query': query,
+    })
 
 
 @require_POST
