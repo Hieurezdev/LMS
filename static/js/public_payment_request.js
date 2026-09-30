@@ -7,8 +7,12 @@
   let rowIndex = 0;
 
   function updateTotal() {
-    const amount = [...rowsContainer.querySelectorAll('input[name="amount"]')]
-      .reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+    const amount = [...rowsContainer.querySelectorAll('.payment-request-row')]
+      .reduce((sum, row) => {
+        const rowAmount = Number(row.querySelector('input[name="amount"]').value) || 0;
+        const periodCount = row.querySelectorAll('input[name="payment_period_name"]:checked').length;
+        return sum + rowAmount * periodCount;
+      }, 0);
     total.textContent = `${new Intl.NumberFormat('vi-VN').format(amount)} VNĐ`;
   }
 
@@ -148,6 +152,9 @@
       chooseEnrollment(enrollment || null);
     });
     amountInput.addEventListener('input', updateTotal);
+    for (const periodInput of periodInputs) {
+      periodInput.addEventListener('change', updateTotal);
+    }
     for (const button of row.querySelectorAll('.quick-amount')) {
       button.addEventListener('click', () => {
         amountInput.value = button.dataset.amount;
