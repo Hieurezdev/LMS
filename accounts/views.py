@@ -11,7 +11,7 @@ from django.core.management.base import CommandError
 from django.db import DatabaseError
 from django.db.models import Prefetch
 from django.db import transaction
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, QueryDict
 from django.http.response import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
@@ -58,9 +58,80 @@ def validate_username(request):
 def public_payment_request(request):
     """Accept a payment request without exposing the authenticated LMS area."""
     if request.method == "POST":
+        batch_items = request.POST.get("batch_items")
+        if batch_items:
+            try:
+                items = json.loads(batch_items)
+            except (TypeError, json.JSONDecodeError):
+                items = None
+            if not isinstance(items, list) or not items:
+                form = PublicPaymentRequestForm()
+                form.add_error(None, "Danh sách khoản thu không hợp lệ.")
+                return render(request, "accounts/payment_request.html", {"form": form})
+
+            cleaned_requests = []
+            batch_error = None
+            for index, item in enumerate(items, start=1):
+                if not isinstance(item, dict):
+                    batch_error = f"Khoản thu dòng {index} không hợp lệ."
+                    break
+                row_data = QueryDict("", mutable=True)
+                for field_name in (
+                    "student_id", "enrollment", "student_name", "classroom_name",
+                    "subject_name", "teacher_name", "amount", "payment_method",
+                ):
+                    if field_name in item:
+                        row_data[field_name] = item[field_name]
+                period_names = item.get("payment_period_name", [])
+                if isinstance(period_names, str):
+                    period_names = [period_names]
+                row_data.setlist("payment_period_name", period_names)
+                row_form = PublicPaymentRequestForm(row_data)
+                if not row_form.is_valid():
+                    error_messages = [
+                        message
+                        for errors in row_form.errors.values()
+                        for message in errors
+                    ]
+                    batch_error = f"Khoản thu dòng {index}: {error_messages[0]}"
+                    break
+                cleaned_requests.append(row_form.cleaned_data)
+
+            if batch_error:
+                form = PublicPaymentRequestForm()
+                form.add_error(None, batch_error)
+                return render(request, "accounts/payment_request.html", {"form": form})
+
+            with transaction.atomic():
+                for data in cleaned_requests:
+                    for period_name in data["payment_period_name"]:
+                        PaymentRequest.objects.create(
+                            enrollment=data["enrollment"],
+                            student_name=data["student_name"],
+                            classroom_name=data["classroom_name"],
+                            subject_name=data["subject_name"],
+                            teacher_name=data["teacher_name"],
+                            payment_period_name=period_name,
+                            amount=data["amount"],
+                            payment_method=data["payment_method"],
+                        )
+            return render(request, "accounts/payment_request_success.html")
+
         form = PublicPaymentRequestForm(request.POST)
         if form.is_valid():
-            form.save()
+            data = form.cleaned_data
+            with transaction.atomic():
+                for period_name in data["payment_period_name"]:
+                    PaymentRequest.objects.create(
+                        enrollment=data["enrollment"],
+                        student_name=data["student_name"],
+                        classroom_name=data["classroom_name"],
+                        subject_name=data["subject_name"],
+                        teacher_name=data["teacher_name"],
+                        payment_period_name=period_name,
+                        amount=data["amount"],
+                        payment_method=data["payment_method"],
+                    )
             return render(request, "accounts/payment_request_success.html")
     else:
         form = PublicPaymentRequestForm(initial={"payment_method": "cash"})
@@ -75,7 +146,7 @@ def _normalized_search_text(value):
 @require_POST
 def public_payment_student_search(request):
     query = " ".join(request.POST.get("query", "").split())[:80]
-    if len(query) < 3:
+    if not query:
         return JsonResponse({"students": []})
 
     now = timezone.now().timestamp()

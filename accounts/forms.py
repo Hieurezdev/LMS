@@ -130,9 +130,9 @@ class ProfileUpdateForm(UserChangeForm):
 
 class PublicPaymentRequestForm(forms.ModelForm):
     student_id = forms.IntegerField(widget=forms.HiddenInput)
-    payment_period_name = forms.ChoiceField(
+    payment_period_name = forms.MultipleChoiceField(
         choices=[(f"Đợt {number}", f"Đợt {number}") for number in range(1, 9)],
-        widget=forms.RadioSelect,
+        widget=forms.CheckboxSelectMultiple,
     )
 
     class Meta:
@@ -187,7 +187,7 @@ class PublicPaymentRequestForm(forms.ModelForm):
         enrollment = cleaned_data.get("enrollment")
         student_id = cleaned_data.get("student_id")
         student_name = cleaned_data.get("student_name", "").strip()
-        period_name = cleaned_data.get("payment_period_name")
+        period_names = cleaned_data.get("payment_period_name", [])
         if not enrollment or not student_id:
             return cleaned_data
 
@@ -201,18 +201,23 @@ class PublicPaymentRequestForm(forms.ModelForm):
             raise forms.ValidationError("Vui lòng chọn lại học sinh từ danh sách gợi ý.")
         if not student.classroom:
             raise forms.ValidationError("Học sinh này chưa được xếp lớp.")
-        if period_name and Payment.objects.filter(
-            student=student,
-            teacher=enrollment.teacher,
-            payment_period__name=period_name,
-        ).exists():
-            raise forms.ValidationError("Học sinh đã đóng đợt thu này với giảng viên được chọn.")
-        if period_name and PaymentRequest.objects.filter(
-            enrollment=enrollment,
-            payment_period_name=period_name,
-            status=PaymentRequest.STATUS_PENDING,
-        ).exists():
-            raise forms.ValidationError("Đợt thu này đã có yêu cầu đang chờ xác nhận.")
+        for period_name in period_names:
+            if Payment.objects.filter(
+                student=student,
+                teacher=enrollment.teacher,
+                payment_period__name=period_name,
+            ).exists():
+                raise forms.ValidationError(
+                    f"Học sinh đã đóng {period_name} với giảng viên được chọn."
+                )
+            if PaymentRequest.objects.filter(
+                enrollment=enrollment,
+                payment_period_name=period_name,
+                status=PaymentRequest.STATUS_PENDING,
+            ).exists():
+                raise forms.ValidationError(
+                    f"{period_name} đã có yêu cầu đang chờ xác nhận."
+                )
 
         cleaned_data.update(
             student_name=student.name,

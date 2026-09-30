@@ -45,7 +45,6 @@
         <div class="card border-0 shadow-sm rounded-4 p-4 payment-create-card">
           <form method="post" novalidate data-student-search-url="{% url 'public_payment_student_search' %}">
             {% csrf_token %}
-            {{ form.student_id }}{{ form.enrollment }}{{ form.teacher_name }}
             <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4 payment-create-header">
               <div class="public-payment-header">
                 <h1 class="h4 fw-bold text-dark mb-1">Thu học phí</h1>
@@ -58,8 +57,14 @@
               </div>
             </div>
             {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
-            <div class="batch-payment-row border rounded-3 p-3 bg-light bg-opacity-25">
-              <div class="public-payment-row-title"><strong><i class="fas fa-receipt" aria-hidden="true"></i>Khoản thu</strong></div>
+            <input type="hidden" name="batch_items" id="batch-items">
+            <div id="payment-request-rows">
+            <div class="batch-payment-row border rounded-3 p-3 bg-light bg-opacity-25 payment-request-row" data-row-index="0">
+              {{ form.student_id }}{{ form.enrollment }}{{ form.teacher_name }}
+              <div class="d-flex justify-content-between align-items-center public-payment-row-title">
+                <strong><i class="fas fa-receipt" aria-hidden="true"></i>Khoản thu</strong>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-payment-row d-none" title="Xóa khoản thu"><i class="fas fa-trash" aria-hidden="true"></i></button>
+              </div>
               <div class="row g-3">
                 <div class="col-12 col-md-6">
                   <label for="{{ form.student_name.id_for_label }}" class="form-label fw-semibold small">Học sinh</label>
@@ -67,7 +72,7 @@
                     {{ form.student_name }}
                     <div id="student-suggestions" class="student-suggestions bg-white border rounded-2 shadow-sm d-none" role="listbox" aria-label="Gợi ý học sinh"></div>
                   </div>
-                  <div class="public-payment-hint">Gõ ít nhất 3 ký tự rồi chọn đúng học sinh và lớp từ gợi ý.</div>
+                  <div class="public-payment-hint">Gõ tên học sinh rồi chọn đúng học sinh và lớp từ gợi ý.</div>
                   {% for error in form.student_name.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
                   {% for error in form.student_id.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
                 </div>
@@ -93,7 +98,7 @@
                     <label class="public-payment-period">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
                     {% endfor %}
                   </div>
-                  <div class="public-payment-hint">Chọn một đợt chưa đóng với giảng viên đã chọn.</div>
+                  <div class="public-payment-hint">Chọn một hoặc nhiều đợt chưa đóng với giảng viên đã chọn.</div>
                   {% for error in form.payment_period_name.errors %}<div class="public-payment-errors">{{ error }}</div>{% endfor %}
                 </div>
                 <div class="col-12">
@@ -110,10 +115,12 @@
                 </div>
               </div>
             </div>
+            </div>
+            <button type="button" id="add-payment-request-row" class="btn btn-outline-primary btn-sm mt-3"><i class="fas fa-plus me-1" aria-hidden="true"></i>Thêm khoản thu</button>
             <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top payment-create-actions public-payment-actions">
               <div class="small text-secondary">Nhân viên sẽ kiểm tra trước khi xác nhận.</div>
               <div class="text-end"><div class="text-secondary small">Số tiền yêu cầu</div><div id="request-total" class="fw-bold text-success fs-5" aria-live="polite">0 VNĐ</div></div>
-              <button type="submit" class="btn btn-primary px-4 rounded-3"><i class="fas fa-paper-plane me-2" aria-hidden="true"></i>Gửi yêu cầu xác nhận</button>
+              <button type="submit" class="btn btn-primary px-4 rounded-3"><i class="fas fa-paper-plane me-2" aria-hidden="true"></i>Gửi các yêu cầu</button>
             </div>
           </form>
         </div>

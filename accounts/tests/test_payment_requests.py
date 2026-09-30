@@ -1,3 +1,4 @@
+import json
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
@@ -40,7 +41,7 @@ class PaymentRequestFlowTests(TestCase):
     def test_search_finds_student_and_only_unpaid_periods(self):
         with translation.override("en"):
             search_url = reverse("public_payment_student_search")
-            self.assertEqual(self.client.post(search_url, {"query": "Ng"}).json()["students"], [])
+            self.assertEqual(self.client.post(search_url, {"query": ""}).json()["students"], [])
             response = self.client.post(search_url, {"query": "Nguyen"})
         self.assertEqual(response.status_code, 200)
         student = response.json()["students"][0]
@@ -122,6 +123,76 @@ class PaymentRequestFlowTests(TestCase):
             })
         self.assertEqual(response.status_code, 200)
         self.assertEqual(PaymentRequest.objects.count(), 0)
+
+    def test_submission_creates_one_pending_request_per_selected_period(self):
+        with translation.override("en"):
+            response = self.client.post(reverse("public_payment_request"), {
+                "student_id": self.student.pk,
+                "enrollment": self.enrollment.pk,
+                "student_name": "Nguyễn Văn A",
+                "classroom_name": "10A1",
+                "subject_name": "Toán",
+                "teacher_name": "Cô Lan",
+                "payment_period_name": ["Đợt 1", "Đợt 2"],
+                "amount": "125000",
+                "payment_method": "cash",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(PaymentRequest.objects.values_list("payment_period_name", flat=True)),
+            {"Đợt 1", "Đợt 2"},
+        )
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_submission_accepts_multiple_students_and_teachers_in_one_batch(self):
+        second_subject = Subject.objects.create(name="Lý")
+        second_teacher = Teacher.objects.create(name="Thầy Minh")
+        second_teacher.subjects.add(second_subject)
+        second_teacher.classes.add(self.student.classroom)
+        second_enrollment = Enrollment.objects.create(
+            student=self.student,
+            teacher=second_teacher,
+            subject=second_subject,
+        )
+        items = [
+            {
+                "student_id": self.student.pk,
+                "enrollment": self.enrollment.pk,
+                "student_name": "Nguyễn Văn A",
+                "classroom_name": "10A1",
+                "subject_name": "Toán",
+                "teacher_name": "Cô Lan",
+                "payment_period_name": ["Đợt 1"],
+                "amount": "125000",
+                "payment_method": "cash",
+            },
+            {
+                "student_id": self.student.pk,
+                "enrollment": second_enrollment.pk,
+                "student_name": "Nguyễn Văn A",
+                "classroom_name": "10A1",
+                "subject_name": "Lý",
+                "teacher_name": "Thầy Minh",
+                "payment_period_name": ["Đợt 1"],
+                "amount": "150000",
+                "payment_method": "cash",
+            },
+        ]
+
+        with translation.override("en"):
+            response = self.client.post(
+                reverse("public_payment_request"),
+                {"batch_items": json.dumps(items)},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(PaymentRequest.objects.count(), 2)
+        self.assertEqual(
+            set(PaymentRequest.objects.values_list("teacher_name", flat=True)),
+            {"Cô Lan", "Thầy Minh"},
+        )
+        self.assertEqual(Payment.objects.count(), 0)
 
     def test_rejected_request_creates_no_payment(self):
         payment_request = PaymentRequest.objects.create(
