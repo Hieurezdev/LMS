@@ -555,3 +555,16 @@ class LMSManagerQueryTest(TestCase):
         )
         self.assertTrue(all(payment.student == self.student2 for payment in batch.payments.all()))
         self.assertTrue(all(payment.amount == 500000 for payment in batch.payments.all()))
+
+    @patch('lms_manager.models.PaymentBatch.generate_receipt_pdf')
+    def test_selected_payments_can_create_a_combined_receipt(self, _batch_pdf):
+        with translation.override('en'):
+            response = self.client.post(
+                reverse('payment_batch_create'),
+                {'payment_ids': [self.payment.id]},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        batch = PaymentBatch.objects.get()
+        self.assertEqual(response.url, reverse('payment_batch_receipt', args=[batch.id]))
+        self.assertEqual(list(batch.payments.all()), [self.payment])

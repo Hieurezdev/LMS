@@ -57,6 +57,7 @@ urlpatterns = [
     # Payment
     path('payments/', views.payment_list, name='payment_list'),
     path('payments/add/', views.payment_create, name='payment_add'),
+    path('payments/batches/create/', views.payment_batch_create, name='payment_batch_create'),
     path('payments/delete-all/', views.payment_delete_all, name='payment_delete_all'),
     path('payments/<int:pk>/delete/', views.payment_delete, name='payment_delete'),
     path('payments/<int:pk>/edit/', views.payment_edit, name='payment_edit'),

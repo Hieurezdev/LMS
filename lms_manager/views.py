@@ -1328,6 +1328,35 @@ def payment_list(request):
 
 
 @require_POST
+@transaction.atomic
+def payment_batch_create(request):
+    payment_ids = request.POST.getlist('payment_ids')
+    if not payment_ids:
+        messages.error(request, 'Hãy chọn ít nhất một giao dịch để tạo hóa đơn tổng.')
+        return redirect('payment_list')
+
+    try:
+        selected_ids = [int(payment_id) for payment_id in payment_ids]
+    except (TypeError, ValueError):
+        messages.error(request, 'Danh sách giao dịch không hợp lệ.')
+        return redirect('payment_list')
+
+    payments = list(Payment.objects.filter(pk__in=selected_ids))
+    if len(payments) != len(set(selected_ids)):
+        messages.error(request, 'Một hoặc nhiều giao dịch không tồn tại.')
+        return redirect('payment_list')
+
+    batch = PaymentBatch.objects.create(
+        payment_date=timezone.localdate(),
+        created_by=request.user,
+    )
+    batch.payments.add(*payments)
+    batch.generate_receipt_pdf()
+    messages.success(request, f'Đã tạo hóa đơn tổng cho {len(payments)} giao dịch.')
+    return redirect('payment_batch_receipt', pk=batch.pk)
+
+
+@require_POST
 def payment_delete_all(request):
     backup_path = prepare_delete_backup(request, 'all-payments')
     if backup_path is None:
