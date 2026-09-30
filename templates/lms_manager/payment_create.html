@@ -202,7 +202,6 @@
     }
     paymentSubmitConfirmed = false;
 
-    const popup = window.open('about:blank', '_blank');
     const button = event.currentTarget.querySelector('button[type="submit"]'); button.disabled = true;
     const confirmButton = document.querySelector('#confirm-payment-submit');
     confirmButton.disabled = true;
@@ -218,14 +217,13 @@
         throw new Error(`Máy chủ trả về lỗi ${response.status}. Nếu vừa cập nhật mã nguồn, hãy chạy: python manage.py migrate`);
       }
       if (!result.success) throw new Error(result.error || 'Không thể lưu khoản thu.');
-      if (popup) popup.location.href = result.receipt_url;
       paymentConfirmModal.hide();
-      window.location.assign(result.redirect_url);
+      window.location.assign(`${result.receipt_url}?print=1`);
     } catch (error) {
       button.disabled = false;
       confirmButton.disabled = false;
       confirmButton.innerHTML = '<i class="fas fa-save me-1"></i>Lưu và xuất biên lai';
-      if (popup) popup.close(); alert(error.message || 'Không thể lưu khoản thu.');
+      alert(error.message || 'Không thể lưu khoản thu.');
     }
   });
 </script>

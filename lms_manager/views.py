@@ -1781,6 +1781,9 @@ def payment_batch_receipt(request, pk):
     batch = get_object_or_404(PaymentBatch, pk=pk)
     if request.user.is_cashier and batch.created_by_id != request.user.id:
         return HttpResponseForbidden('Bạn không có quyền mở biên lai này.')
+    payments = list(batch.payments.select_related(
+        'student', 'classroom', 'subject', 'teacher', 'payment_period'
+    ).order_by('student__name', 'id'))
     import os
     if (
         not batch.receipt_pdf
@@ -1789,6 +1792,16 @@ def payment_batch_receipt(request, pk):
     ):
         batch.generate_receipt_pdf()
         batch.refresh_from_db()
+
+    if request.GET.get('print') == '1':
+        return render(request, 'lms_manager/batch_receipt_pdf.html', {
+            'batch': batch,
+            'payments': payments,
+            'total_amount': sum(payment.amount for payment in payments),
+            'payment_method_display': payments[0].get_payment_method_display() if payments else 'Tiền mặt',
+            'receipt_is_short': len(payments) <= 2,
+            'print_immediately': True,
+        })
 
     response = HttpResponse(batch.receipt_pdf.read(), content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="batch_receipt_{batch.id}.pdf"'

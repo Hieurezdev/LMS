@@ -14,13 +14,21 @@ from .views import (
     backup_file_download,
     backup_restore,
     backup_restore_previous,
+    public_payment_request,
+    payment_request_queue,
+    approve_payment_request,
+    reject_payment_request,
 )
 
 urlpatterns = [
     path("login/", RoleLoginView.as_view(), name="login"),
     path("register/", register, name="register"),
+    path("payment-request/", public_payment_request, name="public_payment_request"),
     path("", include("django.contrib.auth.urls")),
     path("admin_panel/", admin_panel, name="admin_panel"),
+    path("admin_panel/payment-requests/", payment_request_queue, name="payment_request_queue"),
+    path("admin_panel/payment-requests/<int:pk>/approve/", approve_payment_request, name="approve_payment_request"),
+    path("admin_panel/payment-requests/<int:pk>/reject/", reject_payment_request, name="reject_payment_request"),
     path("admin_panel/create-cashier/", create_cashier_account, name="create_cashier_account"),
     path("admin_panel/backups/", backup_center, name="backup_center"),
     path("admin_panel/backups/create/", backup_download, name="backup_download"),

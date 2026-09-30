@@ -91,5 +91,10 @@
   </table>
   <div class="footer">Cảm ơn quý phụ huynh/học sinh đã thanh toán học phí.</div>
   </div>
+  {% if print_immediately %}
+  <script>
+    window.addEventListener('load', () => window.print());
+  </script>
+  {% endif %}
 </body>
 </html>

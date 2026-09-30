@@ -286,6 +286,70 @@ class PaymentBatch(models.Model):
             PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 
 
+class PaymentRequest(models.Model):
+    """Public payment request waiting for staff verification."""
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Chờ xác nhận"),
+        (STATUS_APPROVED, "Đã xác nhận"),
+        (STATUS_REJECTED, "Từ chối"),
+    )
+
+    PAYMENT_METHOD_CHOICES = Payment.PAYMENT_METHOD_CHOICES
+    student_name = models.CharField(max_length=150, verbose_name="Tên học sinh")
+    classroom_name = models.CharField(max_length=150, verbose_name="Lớp học")
+    subject_name = models.CharField(max_length=150, verbose_name="Môn học")
+    teacher_name = models.CharField(max_length=150, verbose_name="Giảng viên")
+    payment_period_name = models.CharField(max_length=100, verbose_name="Đợt thu")
+    amount = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Số tiền")
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default="bank_transfer",
+        verbose_name="Hình thức thanh toán",
+    )
+    payer_phone = models.CharField(max_length=30, verbose_name="Số điện thoại")
+    transaction_reference = models.CharField(
+        max_length=100, blank=True, verbose_name="Mã giao dịch"
+    )
+    note = models.TextField(blank=True, verbose_name="Ghi chú")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        verbose_name="Trạng thái",
+    )
+    payment = models.OneToOneField(
+        Payment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payment_request",
+        verbose_name="Giao dịch được tạo",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_payment_requests",
+        verbose_name="Người xác nhận",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name="Thời điểm xác nhận")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời điểm gửi")
+
+    class Meta:
+        verbose_name = "Yêu cầu thu học phí"
+        verbose_name_plural = "Yêu cầu thu học phí"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student_name} - {self.amount:,.0f} VNĐ ({self.get_status_display()})"
+
+
 class TeacherSettlement(models.Model):
     """A confirmed payout for one teacher in one classroom."""
     teacher = models.ForeignKey(

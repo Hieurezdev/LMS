@@ -75,6 +75,7 @@
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'teacher_list' %}"><i class="fas fa-chalkboard-teacher text-success mb-2"></i><div class="fw-bold text-dark">Giảng viên</div><div class="small text-secondary">Phân công và quyết toán</div></a></div>
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'student_list' %}"><i class="fas fa-user-graduate text-info mb-2"></i><div class="fw-bold text-dark">Học sinh</div><div class="small text-secondary">Hồ sơ và học phí</div></a></div>
     <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'payment_list' %}"><i class="fas fa-wallet text-warning mb-2"></i><div class="fw-bold text-dark">Giao dịch</div><div class="small text-secondary">Theo dõi các khoản thu</div></a></div>
+    <div class="col-12 col-md-6 col-xl-3"><a class="card h-100 p-3 text-decoration-none" href="{% url 'payment_request_queue' %}"><i class="fas fa-qrcode text-info mb-2"></i><div class="fw-bold text-dark">Yêu cầu từ QR</div><div class="small text-secondary">{{ pending_payment_requests }} yêu cầu chờ xác nhận</div></a></div>
   </div>
 
   <div class="card border-danger shadow-sm rounded-4 p-4 mb-5">

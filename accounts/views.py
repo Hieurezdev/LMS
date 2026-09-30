@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import DatabaseError
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.http.response import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -20,8 +21,14 @@ from django.contrib.auth.views import LoginView
 from django.contrib.auth.forms import PasswordChangeForm
 from django.views.decorators.http import require_POST
 from .decorators import admin_required
-from .forms import AdminCashierCreateForm, ApprovalAuthenticationForm, ProfileUpdateForm
+from .forms import (
+    AdminCashierCreateForm,
+    ApprovalAuthenticationForm,
+    ProfileUpdateForm,
+    PublicPaymentRequestForm,
+)
 from .models import User
+from lms_manager.models import Enrollment, Payment, PaymentPeriod, PaymentRequest, Student
 
 
 class RoleLoginView(LoginView):
@@ -43,6 +50,97 @@ def validate_username(request):
     username = request.GET.get("username", None)
     data = {"is_taken": User.objects.filter(username__iexact=username).exists()}
     return JsonResponse(data)
+
+
+def public_payment_request(request):
+    """Accept a payment request without exposing the authenticated LMS area."""
+    if request.method == "POST":
+        form = PublicPaymentRequestForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return render(request, "accounts/payment_request_success.html")
+    else:
+        form = PublicPaymentRequestForm()
+    return render(request, "accounts/payment_request.html", {"form": form})
+
+
+@login_required
+@admin_required
+def payment_request_queue(request):
+    requests = PaymentRequest.objects.select_related("reviewed_by", "payment").all()
+    return render(request, "setting/payment_request_queue.html", {"payment_requests": requests})
+
+
+@login_required
+@admin_required
+@require_POST
+def approve_payment_request(request, pk):
+    payment_request = get_object_or_404(
+        PaymentRequest, pk=pk, status=PaymentRequest.STATUS_PENDING
+    )
+    students = Student.objects.filter(
+        name__iexact=payment_request.student_name.strip(),
+        classroom__name__iexact=payment_request.classroom_name.strip(),
+    )
+    if students.count() != 1:
+        messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
+        return redirect("payment_request_queue")
+
+    student = students.first()
+    enrollments = Enrollment.objects.filter(
+        student=student,
+        subject__name__iexact=payment_request.subject_name.strip(),
+        teacher__name__iexact=payment_request.teacher_name.strip(),
+    ).select_related("subject", "teacher")
+    if enrollments.count() != 1:
+        messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
+        return redirect("payment_request_queue")
+
+    enrollment = enrollments.first()
+    period, _ = PaymentPeriod.objects.get_or_create(
+        name=payment_request.payment_period_name.strip(),
+        teacher=enrollment.teacher,
+        subject=enrollment.subject,
+    )
+    if Payment.objects.filter(
+        student=student, teacher=enrollment.teacher, payment_period=period
+    ).exists():
+        messages.error(request, "Học sinh này đã có giao dịch cho đợt thu đã chọn.")
+        return redirect("payment_request_queue")
+
+    with transaction.atomic():
+        payment = Payment.objects.create(
+            student=student,
+            classroom=student.classroom,
+            subject=enrollment.subject,
+            teacher=enrollment.teacher,
+            payment_period=period,
+            amount=payment_request.amount,
+            payment_method=payment_request.payment_method,
+        )
+        payment_request.payment = payment
+        payment_request.status = PaymentRequest.STATUS_APPROVED
+        payment_request.reviewed_by = request.user
+        payment_request.reviewed_at = timezone.now()
+        payment_request.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
+
+    messages.success(request, "Đã xác nhận yêu cầu và tạo giao dịch học phí.")
+    return redirect("payment_request_queue")
+
+
+@login_required
+@admin_required
+@require_POST
+def reject_payment_request(request, pk):
+    payment_request = get_object_or_404(
+        PaymentRequest, pk=pk, status=PaymentRequest.STATUS_PENDING
+    )
+    payment_request.status = PaymentRequest.STATUS_REJECTED
+    payment_request.reviewed_by = request.user
+    payment_request.reviewed_at = timezone.now()
+    payment_request.save(update_fields=["status", "reviewed_by", "reviewed_at"])
+    messages.success(request, "Đã từ chối yêu cầu thu học phí.")
+    return redirect("payment_request_queue")
 
 
 @login_required
@@ -95,6 +193,9 @@ def admin_panel(request):
                 is_active=True,
             ).count(),
             "admin_count": User.objects.filter(is_superuser=True, is_active=True).count(),
+            "pending_payment_requests": PaymentRequest.objects.filter(
+                status=PaymentRequest.STATUS_PENDING
+            ).count(),
             "cashier_form": AdminCashierCreateForm(),
             "backups": [_backup_info(path) for path in backup_paths],
         },

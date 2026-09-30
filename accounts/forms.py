@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, UserChangeForm, UserCreationForm
 from django.core.exceptions import ValidationError
 from .models import User, GENDERS
+from lms_manager.models import PaymentRequest
 
 
 class CashierRegistrationForm(UserCreationForm):
@@ -125,3 +126,51 @@ class ProfileUpdateForm(UserChangeForm):
             "address",
             "picture",
         ]
+
+
+class PublicPaymentRequestForm(forms.ModelForm):
+    class Meta:
+        model = PaymentRequest
+        fields = (
+            "student_name",
+            "classroom_name",
+            "subject_name",
+            "teacher_name",
+            "payment_period_name",
+            "amount",
+            "payment_method",
+            "payer_phone",
+            "transaction_reference",
+            "note",
+        )
+        labels = {
+            "student_name": "Tên học sinh",
+            "classroom_name": "Lớp học",
+            "subject_name": "Môn học",
+            "teacher_name": "Giảng viên",
+            "payment_period_name": "Đợt thu",
+            "amount": "Số tiền",
+            "payment_method": "Hình thức thanh toán",
+            "payer_phone": "Số điện thoại liên hệ",
+            "transaction_reference": "Mã giao dịch (nếu có)",
+            "note": "Ghi chú",
+        }
+        widgets = {
+            "payment_period_name": forms.Select(
+                choices=[(f"Đợt {number}", f"Đợt {number}") for number in range(1, 9)]
+            ),
+            "amount": forms.NumberInput(attrs={"min": 1, "step": 1}),
+            "note": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "form-control")
+        self.fields["payment_method"].widget.attrs["class"] = "form-select"
+
+    def clean_amount(self):
+        amount = self.cleaned_data["amount"]
+        if amount <= 0:
+            raise forms.ValidationError("Số tiền phải lớn hơn 0.")
+        return amount
