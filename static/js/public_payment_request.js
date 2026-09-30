@@ -150,11 +150,9 @@
     teacherChoice.addEventListener('change', () => {
       const enrollment = selectedStudent?.enrollments.find(item => item.id === Number(teacherChoice.value));
       chooseEnrollment(enrollment || null);
+      updateTotal();
     });
     amountInput.addEventListener('input', updateTotal);
-    for (const periodInput of periodInputs) {
-      periodInput.addEventListener('change', updateTotal);
-    }
     for (const button of row.querySelectorAll('.quick-amount')) {
       button.addEventListener('click', () => {
         amountInput.value = button.dataset.amount;
@@ -196,6 +194,9 @@
     removeButton.closest('.payment-request-row').remove();
     updateTotal();
   });
+
+  form.addEventListener('input', updateTotal);
+  form.addEventListener('change', updateTotal);
 
   form.addEventListener('submit', () => {
     const paymentMethod = form.querySelector('[name="payment_method"]').value;
