@@ -70,6 +70,13 @@
           <span>Giao dịch</span>
         </a>
       </li>
+      <li class="{% if request.resolver_match.url_name == 'payment_request_queue' %}active{% endif %}">
+        <a href="{% url 'payment_request_queue' %}">
+          <span class="nav-icon"><i class="fas fa-hourglass-half"></i></span>
+          <span>Hàng chờ giao dịch</span>
+          {% if pending_payment_request_count %}<span class="badge bg-warning text-dark ms-auto">{{ pending_payment_request_count }}</span>{% endif %}
+        </a>
+      </li>
       {% endif %}
       <li>
         <a href="{% url 'payment_add' %}">

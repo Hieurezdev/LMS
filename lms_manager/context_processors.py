@@ -3,6 +3,18 @@ Context processor tự động build breadcrumb cho các trang lms_manager
 dựa trên URL pattern và resolver_match.
 """
 
+from .models import PaymentRequest
+
+
+def pending_payment_requests(request):
+    if not getattr(request.user, "is_admin", False):
+        return {"pending_payment_request_count": 0}
+    return {
+        "pending_payment_request_count": PaymentRequest.objects.filter(
+            status=PaymentRequest.STATUS_PENDING
+        ).count()
+    }
+
 
 def breadcrumb(request):
     items = []
