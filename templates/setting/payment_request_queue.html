@@ -33,10 +33,19 @@
       <div class="table-card-title"><i class="fas fa-hourglass-half" aria-hidden="true"></i> Danh sách yêu cầu</div>
       <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payment_requests|length }} yêu cầu</span>
     </div>
+    <form method="post" action="{% url 'payment_batch_create' %}" id="payment-request-batch-form">
+      {% csrf_token %}
+      <div class="d-flex justify-content-end px-3 pt-3">
+        <button type="submit" class="btn btn-outline-success" onclick="return confirm('Tạo phiếu thu tổng cho các giao dịch đã chọn?');">
+          <i class="fas fa-file-invoice me-1" aria-hidden="true"></i> Tạo phiếu thu tổng
+        </button>
+      </div>
+    </form>
     <div class="table-responsive">
       <table class="lms-table" style="min-width: 900px;">
         <thead>
           <tr>
+            <th style="width:42px;text-align:center;"><input type="checkbox" id="select-approved-payments" title="Chọn các giao dịch đã duyệt"></th>
             <th>Học sinh</th>
             <th>Lớp / Môn</th>
             <th>Giảng viên / Đợt</th>
@@ -49,6 +58,11 @@
         <tbody>
           {% for item in payment_requests %}
           <tr>
+            <td style="text-align:center;">
+              {% if item.status == 'approved' and item.payment %}
+                <input type="checkbox" name="payment_ids" value="{{ item.payment_id }}" class="approved-payment-selection" form="payment-request-batch-form">
+              {% endif %}
+            </td>
             <td><strong>{{ item.student_name }}</strong><br><small class="text-secondary">{{ item.payer_phone }}</small></td>
             <td>{{ item.classroom_name }}<br><small class="text-secondary">{{ item.subject_name }}</small></td>
             <td>{{ item.teacher_name }}<br><small class="text-secondary">{{ item.payment_period_name }}</small></td>
@@ -69,12 +83,21 @@
                     {% csrf_token %}<button type="submit" class="btn btn-outline-danger btn-xs">Từ chối</button>
                   </form>
                 </div>
-              {% else %}<small class="text-secondary">{{ item.reviewed_at|date:'d/m/Y H:i' }}</small>{% endif %}
+              {% else %}
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <small class="text-secondary">{{ item.reviewed_at|date:'d/m/Y H:i' }}</small>
+                  {% if item.payment %}
+                    <a href="{% url 'payment_receipt' item.payment_id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="Xem biên lai giao dịch">
+                      <i class="fas fa-print" aria-hidden="true"></i>
+                    </a>
+                  {% endif %}
+                </div>
+              {% endif %}
             </td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center py-5" style="color:#94A3B8;">
+            <td colspan="8" class="text-center py-5" style="color:#94A3B8;">
               <i class="fas fa-hourglass-half fa-2x mb-2 d-block" style="color:#E2E8F0;" aria-hidden="true"></i>
               Chưa có yêu cầu nào
             </td>
@@ -86,3 +109,21 @@
   </div>
 </div>
 {% endblock %}
+
+{% block js %}
+<script>
+  const selectApprovedPayments = document.querySelector('#select-approved-payments');
+  const approvedPaymentSelections = () => [...document.querySelectorAll('.approved-payment-selection')];
+  selectApprovedPayments?.addEventListener('change', () => {
+    approvedPaymentSelections().forEach(checkbox => { checkbox.checked = selectApprovedPayments.checked; });
+  });
+  approvedPaymentSelections().forEach(checkbox => {
+    checkbox.addEventListener('change', () => {
+      if (selectApprovedPayments) {
+        selectApprovedPayments.checked = approvedPaymentSelections().length > 0
+          && approvedPaymentSelections().every(item => item.checked);
+      }
+    });
+  });
+</script>
+{% endblock js %}
