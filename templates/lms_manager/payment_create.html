@@ -6,7 +6,7 @@
 <div class="container-fluid pt-3 payment-create-page">
   {% include 'snippets/breadcrumb.html' with items=breadcrumb_items %}
   <div class="row justify-content-center mt-3 payment-create-row">
-    <div class="col-12 col-xl-10 payment-create-column">
+    <div class="col-12 payment-create-column">
       <div class="card border-0 shadow-sm rounded-4 p-4 payment-create-card">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4 payment-create-header">
           <div>
@@ -29,7 +29,7 @@
         <form id="batch-payment-form" method="post" novalidate>
           {% csrf_token %}
           <input type="hidden" name="batch_items" id="batch-items">
-          <div id="batch-payment-list" class="d-flex flex-column gap-3"></div>
+          <div id="batch-payment-list" class="batch-payment-list d-flex flex-column gap-3"></div>
           <button type="button" id="add-payment-row" class="btn btn-outline-primary btn-sm rounded-3 mt-3"><i class="fas fa-plus me-1"></i> Thêm khoản thu</button>
           <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top payment-create-actions">
             <a href="{% if request.user.is_cashier %}{% url 'cashier_due_list' %}{% else %}{% url 'payment_list' %}{% endif %}" class="btn btn-outline-secondary px-4 rounded-3"><i class="fas fa-arrow-left me-2"></i>Quay lại</a>
@@ -121,6 +121,13 @@
     const nameInput = row.querySelector('.student-name-input');
     const studentIdInput = row.querySelector('.student-id-input');
     const suggestions = row.querySelector('.student-suggestions');
+    const positionSuggestions = () => {
+      if (!window.matchMedia('(min-width: 769px)').matches) return;
+      const inputBounds = nameInput.getBoundingClientRect();
+      suggestions.style.left = `${inputBounds.left}px`;
+      suggestions.style.top = `${inputBounds.bottom}px`;
+      suggestions.style.width = `${inputBounds.width}px`;
+    };
     const normalized = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
     const selectStudent = student => {
       studentIdInput.value = student.id;
@@ -149,6 +156,7 @@
         .slice(0, 8);
       suggestions.innerHTML = matches.length ? matches.map(student => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 student-suggestion" data-id="${student.id}"><strong>${escapeHtml(student.name)}</strong><br><small class="text-secondary">${escapeHtml(student.classroom)}</small></button>`).join('') : '<div class="px-3 py-2 text-secondary small">Không tìm thấy học sinh phù hợp</div>';
       suggestions.classList.remove('d-none');
+      positionSuggestions();
       suggestions.querySelectorAll('.student-suggestion').forEach(button => button.addEventListener('mousedown', event => { event.preventDefault(); selectStudent(students.find(student => student.id === Number(button.dataset.id))); }));
     };
     nameInput.addEventListener('input', () => { lastSelectedStudentId = null; showSuggestions(true); });
@@ -160,6 +168,8 @@
       }
     });
     nameInput.addEventListener('blur', () => setTimeout(() => suggestions.classList.add('d-none'), 150));
+    paymentList.addEventListener('scroll', () => suggestions.classList.add('d-none'));
+    window.addEventListener('resize', () => suggestions.classList.add('d-none'));
     row.querySelector('.amount-input').addEventListener('input', updateTotal);
     row.querySelectorAll('.quick-amount').forEach(button => button.addEventListener('click', () => {
       row.querySelector('.amount-input').value = button.dataset.amount;
