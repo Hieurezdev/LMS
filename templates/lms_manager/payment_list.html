@@ -101,10 +101,12 @@
                 <a href="{% url 'payment_receipt' p.id %}" class="btn btn-outline-primary btn-xs" target="_blank" title="In biên lai">
                   <i class="fas fa-print"></i>
                 </a>
-                <a href="{% url 'payment_delete' p.id %}" class="btn btn-outline-danger btn-xs"
-                   onclick="return confirm('Xóa giao dịch này?');" title="Xóa">
-                  <i class="fas fa-trash"></i>
-                </a>
+                <form method="post" action="{% url 'payment_delete' p.id %}" onsubmit="return confirm('Xóa giao dịch này?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-danger btn-xs" title="Xóa">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </form>
               </div>
             </td>
           </tr>

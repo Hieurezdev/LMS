@@ -151,9 +151,12 @@
                       <a href="{% url 'payment_edit' r.payment_id %}" class="btn btn-outline-warning btn-xs text-dark" title="Chỉnh sửa">
                         <i class="fas fa-edit"></i>
                       </a>
-                      <a href="{% url 'payment_delete' r.payment_id %}?next={{ request.path|urlencode }}" class="btn btn-outline-danger btn-xs" onclick="return confirm('Xóa giao dịch này?')" title="Xóa">
-                        <i class="fas fa-trash-alt"></i>
-                      </a>
+                      <form method="post" action="{% url 'payment_delete' r.payment_id %}?next={{ request.path|urlencode }}" onsubmit="return confirm('Xóa giao dịch này?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-xs" title="Xóa">
+                          <i class="fas fa-trash-alt"></i>
+                        </button>
+                      </form>
                     </div>
                   {% else %}
                     <a href="{% url 'payment_add' %}?student={{ student.id }}&period={{ r.period.id }}" class="btn btn-success btn-xs">

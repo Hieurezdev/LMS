@@ -178,7 +178,7 @@
                 <p class="text-muted small">Hãy nhấn nút <strong>Import học sinh từ Excel</strong> ở trên để tải danh sách học sinh cho lớp này.</p>
               </div>
               {% else %}
-              <table class="lms-table teacher-student-table table table-hover align-middle mb-0" id="table-classroom-{{ report.classroom.id }}" style="font-size: 13px;">
+              <table class="lms-table teacher-student-table table table-hover align-middle mb-0" id="table-classroom-{{ report.classroom.id }}" data-teacher-id="{{ teacher.id }}" style="font-size: 13px;">
                 <thead class="table-light text-center">
                   <tr>
                     <th style="width: 50px;">STT</th>
@@ -335,9 +335,7 @@
   const csrftoken = getCookie('csrftoken');
   const lang = '{{ request.LANGUAGE_CODE|default:"en" }}';
 
-  let currentStudentId = null;
-  let currentPeriodNum = null;
-  let currentBadgeElement = null;
+  let currentPaymentId = null;
   let receiptModal = null;
 
   document.addEventListener("DOMContentLoaded", function() {
@@ -363,85 +361,51 @@
           badge.addEventListener('click', function() {
               const studentId = this.getAttribute('data-student-id');
               const periodNum = this.getAttribute('data-period');
-              const isPaid = this.classList.contains('bg-success');
-              
-              if (isPaid) {
-                  currentStudentId = studentId;
-                  currentPeriodNum = periodNum;
-                  currentBadgeElement = this;
-                  
-                  this.style.opacity = '0.5';
-                  fetch(`/${lang}/api/students/${studentId}/period/${periodNum}/receipt-url/`)
-                      .then(res => res.json())
-                      .then(data => {
-                          this.style.opacity = '1';
-                          if (data.success) {
-                              document.getElementById('receipt-iframe').src = data.receipt_url;
-                              document.getElementById('btn-download-receipt').href = data.receipt_url;
-                              if (receiptModal) {
-                                  receiptModal.show();
-                              }
-                          } else {
-                              alert("Lỗi: " + (data.error || "Không thể tải biên lai"));
-                          }
-                      })
-                      .catch(err => {
-                          this.style.opacity = '1';
-                          console.error(err);
-                          alert("Lỗi kết nối máy chủ khi lấy biên lai!");
-                      });
-              } else {
-                  this.style.opacity = '0.5';
-                  togglePaymentStatus(studentId, periodNum, this);
-              }
+              const teacherId = this.closest('table').dataset.teacherId;
+              currentPaymentId = null;
+
+              this.style.opacity = '0.5';
+              fetch(`/${lang}/api/students/${studentId}/period/${periodNum}/receipt-url/?teacher=${teacherId}`)
+                  .then(res => res.json())
+                  .then(data => {
+                      this.style.opacity = '1';
+                      if (data.success) {
+                          currentPaymentId = data.payment_id;
+                          document.getElementById('receipt-iframe').src = data.receipt_url;
+                          document.getElementById('btn-download-receipt').href = data.receipt_url;
+                          if (receiptModal) receiptModal.show();
+                      } else {
+                          alert("Lỗi: " + (data.error || "Không thể tải biên lai"));
+                      }
+                  })
+                  .catch(err => {
+                      this.style.opacity = '1';
+                      console.error(err);
+                      alert("Lỗi kết nối máy chủ khi lấy biên lai!");
+                  });
           });
       });
 
       const cancelPaymentBtn = document.getElementById('btn-cancel-payment');
       if (cancelPaymentBtn) {
-          cancelPaymentBtn.addEventListener('click', function() {
-              if (confirm("Bạn có chắc chắn muốn hủy đóng học phí đợt này? Biên lai cũ sẽ bị xóa hoàn toàn.")) {
-                  if (receiptModal) {
-                      receiptModal.hide();
-                  }
-                  if (currentBadgeElement && currentStudentId && currentPeriodNum) {
-                      currentBadgeElement.style.opacity = '0.5';
-                      togglePaymentStatus(currentStudentId, currentPeriodNum, currentBadgeElement);
-                  }
+          cancelPaymentBtn.addEventListener('click', async function() {
+              if (!currentPaymentId || !confirm('Hủy giao dịch học phí này? Hệ thống sẽ tạo backup trước khi xóa giao dịch.')) return;
+              this.disabled = true;
+              try {
+                  const response = await fetch(`/${lang}/payments/${currentPaymentId}/delete/`, {
+                      method: 'POST',
+                      headers: { 'X-CSRFToken': csrftoken, 'X-Requested-With': 'XMLHttpRequest' }
+                  });
+                  const data = await response.json();
+                  if (!response.ok || !data.success) throw new Error(data.error || 'Không thể hủy giao dịch.');
+                  window.location.reload();
+              } catch (error) {
+                  alert(`Lỗi: ${error.message}`);
+                  this.disabled = false;
               }
           });
       }
   });
-
-  function togglePaymentStatus(studentId, periodNum, badgeElement) {
-      fetch(`/${lang}/api/students/${studentId}/toggle-period/${periodNum}/`, {
-          method: 'POST',
-          headers: {
-              'X-CSRFToken': csrftoken,
-              'Content-Type': 'application/json'
-          }
-      })
-      .then(response => response.json())
-      .then(data => {
-          badgeElement.style.opacity = '1';
-          if (data.success) {
-              if (data.new_status === 'Đã đóng') {
-                  badgeElement.className = "badge payment-toggle-badge bg-success text-white";
-                  badgeElement.innerHTML = `<i class="fas fa-check-circle me-1"></i>Đã đóng`;
-              } else {
-                  badgeElement.className = "badge payment-toggle-badge bg-light text-secondary border";
-                  badgeElement.innerHTML = `<i class="fas fa-clock me-1"></i>Chưa đóng`;
-              }
-          } else {
-              alert("Lỗi: " + (data.error || "Không xác định"));
-          }
-      })
-      .catch(err => {
-          badgeElement.style.opacity = '1';
-          console.error(err);
-          alert("Lỗi kết nối máy chủ!");
-      });
-  }
 
   function exportToCSV(tableId, className) {
     const csv = [];

@@ -1654,30 +1654,31 @@ def payment_create(request):
     })
 
 
+@require_POST
 def payment_delete(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     backup_path = prepare_delete_backup(request, f'payment-{payment.pk}')
     if backup_path is None:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': 'Không thể tạo backup trước khi hủy giao dịch.'}, status=500)
         return redirect('payment_list')
     student = payment.student
     period = payment.payment_period
-    
-    # Try to extract the period number
-    period_num = None
-    if period:
-        for i in range(1, 9):
-            if str(i) in period.name:
-                period_num = i
-                break
-                
-    payment.delete()
-    
-    if student and period_num:
-        other_exists = Payment.objects.filter(student=student, payment_period=period).exists()
-        if not other_exists:
-            setattr(student, f"dot_{period_num}", "Chưa đóng")
-            student.save()
-            
+    period_num = _payment_period_number(period) if period else None
+
+    with transaction.atomic():
+        payment.delete()
+        if student and period_num:
+            other_exists = Payment.objects.filter(
+                student=student, payment_period__name=period.name
+            ).exists()
+            if not other_exists:
+                setattr(student, f"dot_{period_num}", "Chưa đóng")
+                student.save(update_fields=[f"dot_{period_num}"])
+
+    if is_ajax:
+        return JsonResponse({'success': True})
     messages.success(request, f"Đã xóa giao dịch. Backup trước xóa: {backup_path.name}")
     
     next_url = request.GET.get('next') or request.META.get('HTTP_REFERER')
@@ -2680,13 +2681,19 @@ def get_student_unpaid_periods(request, student_id):
 
 
 def get_receipt_url(request, student_id, period_num):
-    from django.urls import reverse
-    payment = Payment.objects.filter(
+    teacher_id = request.GET.get('teacher')
+    if not teacher_id or not teacher_id.isdecimal() or int(teacher_id) <= 0 or period_num not in range(1, 9):
+        return JsonResponse({'success': False, 'error': 'Thông tin giảng viên hoặc đợt thu không hợp lệ.'}, status=400)
+    payments = list(Payment.objects.filter(
         student_id=student_id,
-        payment_period__name=f"Đợt {period_num}"
-    ).first()
-    
-    if payment:
+        teacher_id=int(teacher_id),
+        payment_period__name=f"Đợt {period_num}",
+    )[:2])
+
+    if len(payments) > 1:
+        return JsonResponse({'success': False, 'error': 'Có nhiều giao dịch trong đợt này. Vui lòng hủy từ danh sách giao dịch.'}, status=409)
+    if payments:
+        payment = payments[0]
         import os
         if not payment.receipt_pdf or not os.path.exists(payment.receipt_pdf.path):
             payment.generate_receipt_pdf()

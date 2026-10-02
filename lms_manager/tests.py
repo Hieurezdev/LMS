@@ -121,6 +121,71 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(response, 'Other Student')
         self.assertNotContains(response, self.student1.name)
 
+    def test_receipt_lookup_uses_teacher_and_rejects_ambiguous_payments(self):
+        first_period = PaymentPeriod.objects.create(
+            name='Đợt 1', teacher=self.teacher, subject=self.subject
+        )
+        other_teacher = Teacher.objects.create(name='Ms. Jones')
+        other_period = PaymentPeriod.objects.create(
+            name='Đợt 1', teacher=other_teacher, subject=self.subject
+        )
+        with patch.object(Payment, 'generate_receipt_pdf'):
+            first_payment = Payment.objects.create(
+                student=self.student1, classroom=self.classroom, subject=self.subject,
+                teacher=self.teacher, payment_period=first_period, amount=100000,
+            )
+            other_payment = Payment.objects.create(
+                student=self.student1, classroom=self.classroom, subject=self.subject,
+                teacher=other_teacher, payment_period=other_period, amount=200000,
+            )
+            with translation.override('en'):
+                url = reverse('api_get_receipt_url', args=[self.student1.pk, 1])
+                self.assertEqual(self.client.get(url).status_code, 400)
+                first = self.client.get(url, {'teacher': self.teacher.pk})
+                other = self.client.get(url, {'teacher': other_teacher.pk})
+                self.assertEqual(first.json()['payment_id'], first_payment.pk)
+                self.assertEqual(other.json()['payment_id'], other_payment.pk)
+
+                Payment.objects.create(
+                    student=self.student1, classroom=self.classroom, subject=self.subject,
+                    teacher=self.teacher, payment_period=first_period, amount=50000,
+                )
+                self.assertEqual(self.client.get(url, {'teacher': self.teacher.pk}).status_code, 409)
+
+    def test_cancel_payment_requires_post_and_updates_only_deleted_payment(self):
+        period = PaymentPeriod.objects.create(
+            name='Đợt 1', teacher=self.teacher, subject=self.subject
+        )
+        self.student1.dot_1 = 'Đã đóng'
+        self.student1.save(update_fields=['dot_1'])
+        with patch.object(Payment, 'generate_receipt_pdf'):
+            payment = Payment.objects.create(
+                student=self.student1, classroom=self.classroom, subject=self.subject,
+                teacher=self.teacher, payment_period=period, amount=100000,
+            )
+        with translation.override('en'):
+            url = reverse('payment_delete', args=[payment.pk])
+            self.assertEqual(self.client.get(url).status_code, 405)
+            with patch('lms_manager.views.prepare_delete_backup', return_value=Path('backup.tar.gz')):
+                response = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'success': True})
+        self.assertFalse(Payment.objects.filter(pk=payment.pk).exists())
+        self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
+        self.student1.refresh_from_db()
+        self.assertEqual(self.student1.dot_1, 'Chưa đóng')
+
+    def test_cancel_payment_preserves_record_when_backup_fails(self):
+        with translation.override('en'):
+            url = reverse('payment_delete', args=[self.payment.pk])
+            with patch('lms_manager.views.prepare_delete_backup', return_value=None):
+                response = self.client.post(url, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+        self.assertEqual(response.status_code, 500)
+        self.assertFalse(response.json()['success'])
+        self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
+
     def test_teacher_list_searches_by_name_and_phone(self):
         other_teacher = Teacher.objects.create(name='Ms. Jones', phone='0988111222')
 
