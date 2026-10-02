@@ -214,6 +214,21 @@ class PaymentRequestFlowTests(TestCase):
             2,
         )
 
+    def test_invalid_batch_shows_error_without_creating_request(self):
+        with translation.override("en"):
+            url = reverse("public_payment_request")
+            invalid_json = self.client.post(url, {"batch_items": "not json"})
+            invalid_row = self.client.post(url, {"batch_items": json.dumps([{
+                "student_name": self.student.name,
+                "payment_period_name": ["Đợt 1"],
+                "amount": "125000",
+                "payment_method": "cash",
+            }])})
+
+        self.assertContains(invalid_json, "Danh sách khoản thu không hợp lệ.")
+        self.assertContains(invalid_row, "Khoản thu dòng 1:")
+        self.assertEqual(PaymentRequest.objects.count(), 0)
+
     def test_rejected_request_creates_no_payment(self):
         payment_request = PaymentRequest.objects.create(
             student_name="Nguyễn Văn A",

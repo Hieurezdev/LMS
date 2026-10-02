@@ -66,7 +66,8 @@ def public_payment_request(request):
             except (TypeError, json.JSONDecodeError):
                 items = None
             if not isinstance(items, list) or not items:
-                form = PublicPaymentRequestForm()
+                form = PublicPaymentRequestForm(request.POST)
+                form.is_valid()
                 form.add_error(None, "Danh sách khoản thu không hợp lệ.")
                 return render(request, "accounts/payment_request.html", {"form": form})
 
@@ -99,7 +100,8 @@ def public_payment_request(request):
                 cleaned_requests.append(row_form.cleaned_data)
 
             if batch_error:
-                form = PublicPaymentRequestForm()
+                form = PublicPaymentRequestForm(request.POST)
+                form.is_valid()
                 form.add_error(None, batch_error)
                 return render(request, "accounts/payment_request.html", {"form": form})
 

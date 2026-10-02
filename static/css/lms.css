@@ -825,25 +825,22 @@ a:hover { color: var(--primary-dark); }
   .payment-create-actions .text-end { text-align: center !important; }
 }
 
-@media (min-width: 769px) {
-  .payment-create-page .batch-payment-list {
-    flex-direction: row !important;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: 8px;
-    -webkit-overflow-scrolling: touch;
-  }
-  .payment-create-page .batch-payment-row {
-    flex: 0 0 calc((100% - 1rem) / 2);
-    min-width: 0;
-  }
-  .payment-create-page .batch-payment-row:only-child {
-    flex-basis: 100%;
-  }
-  .payment-create-page .student-suggestions {
-    position: fixed !important;
-  }
+.payment-create-page .batch-payment-list {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.payment-create-page .batch-payment-row {
+  flex: 0 0 calc((100% - 1rem) / 2);
+  min-width: 0;
+}
+.payment-create-page .batch-payment-row:only-child {
+  flex-basis: 100%;
+}
+.payment-create-page .batch-payment-list .student-suggestions {
+  position: fixed !important;
 }
 
 @media (max-width: 420px) {
