@@ -84,8 +84,8 @@
             <td class="text-end">
               {% if item.status == 'pending' %}
                 <div class="d-flex justify-content-end gap-1">
-                  <form method="post" action="{% url 'approve_payment_request' item.id %}" onsubmit="return confirm('Xác nhận và tạo giao dịch học phí cho yêu cầu này?');">
-                    {% csrf_token %}<button type="submit" class="btn btn-success btn-xs">Duyệt</button>
+                  <form method="post" action="{% url 'approve_payment_request' item.id %}">
+                    {% csrf_token %}<button type="button" class="btn btn-success btn-xs" data-bs-toggle="modal" data-bs-target="#approve-payment-confirm" data-student-name="{{ item.student_name }}" data-classroom-name="{{ item.classroom_name }}">Duyệt</button>
                   </form>
                   <form method="post" action="{% url 'reject_payment_request' item.id %}" onsubmit="return confirm('Từ chối yêu cầu này?');">
                     {% csrf_token %}<button type="submit" class="btn btn-outline-danger btn-xs">Từ chối</button>
@@ -116,10 +116,44 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="approve-payment-confirm" tabindex="-1" aria-labelledby="approve-payment-confirm-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="approve-payment-confirm-title">Bạn có muốn duyệt yêu cầu này không?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+      </div>
+      <div class="modal-body">
+        <div><strong id="approve-payment-student"></strong> <span class="text-secondary" id="approve-payment-classroom"></span></div>
+        <p class="text-secondary small mb-0 mt-2">Khi duyệt, hệ thống sẽ ghi nhận các khoản thu trong cùng nhóm yêu cầu và tạo phiếu thu.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Không, quay lại</button>
+        <button type="button" class="btn btn-success" id="confirm-approve-payment">Có, duyệt yêu cầu</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block js %}
 <script>
+  const approveModal = document.querySelector('#approve-payment-confirm');
+  let approveForm = null;
+  approveModal.addEventListener('show.bs.modal', event => {
+    const button = event.relatedTarget;
+    approveForm = button.closest('form');
+    document.querySelector('#approve-payment-student').textContent = button.dataset.studentName;
+    document.querySelector('#approve-payment-classroom').textContent = `(${button.dataset.classroomName})`;
+  });
+  approveModal.addEventListener('hidden.bs.modal', () => { approveForm = null; });
+  document.querySelector('#confirm-approve-payment').addEventListener('click', event => {
+    if (!approveForm) return;
+    event.currentTarget.disabled = true;
+    approveForm.requestSubmit();
+  });
+
   const selectApprovedPayments = document.querySelector('#select-approved-payments');
   const approvedPaymentSelections = () => [...document.querySelectorAll('.approved-payment-selection')];
   selectApprovedPayments?.addEventListener('change', () => {
