@@ -10,7 +10,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import DatabaseError
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.db import transaction
 from django.http import FileResponse, Http404, QueryDict
 from django.http.response import JsonResponse
@@ -216,9 +216,20 @@ def public_payment_student_search(request):
 @login_required
 @admin_required
 def payment_request_queue(request):
+    query = request.GET.get("q", "").strip()[:150]
     requests = PaymentRequest.objects.select_related("reviewed_by", "payment").all()
+    if query:
+        requests = requests.filter(
+            Q(student_name__icontains=query)
+            | Q(classroom_name__icontains=query)
+            | Q(subject_name__icontains=query)
+            | Q(teacher_name__icontains=query)
+            | Q(payment_period_name__icontains=query)
+            | Q(payer_phone__icontains=query)
+        )
     return render(request, "setting/payment_request_queue.html", {
         "payment_requests": requests,
+        "payment_request_query": query,
         "breadcrumb_items": [
             {"label": "Giao dịch đóng tiền", "url": reverse("payment_list")},
             {"label": "Hàng chờ giao dịch"},

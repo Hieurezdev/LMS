@@ -33,6 +33,14 @@
       <div class="table-card-title"><i class="fas fa-hourglass-half" aria-hidden="true"></i> Danh sách yêu cầu</div>
       <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payment_requests|length }} yêu cầu</span>
     </div>
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-center px-3 pt-3">
+      <div class="input-group" style="max-width:520px;">
+        <span class="input-group-text bg-white"><i class="fas fa-search text-secondary" aria-hidden="true"></i></span>
+        <input type="search" name="q" value="{{ payment_request_query }}" class="form-control" placeholder="Tìm học sinh, lớp, môn, giảng viên, đợt thu, SĐT..." aria-label="Tìm kiếm yêu cầu giao dịch">
+        <button type="submit" class="btn btn-primary">Tìm kiếm</button>
+      </div>
+      {% if payment_request_query %}<a href="{% url 'payment_request_queue' %}" class="btn btn-outline-secondary">Xóa tìm kiếm</a>{% endif %}
+    </form>
     <form method="post" action="{% url 'payment_batch_create' %}" id="payment-request-batch-form">
       {% csrf_token %}
       <div class="d-flex justify-content-end px-3 pt-3">
@@ -99,7 +107,7 @@
           <tr>
             <td colspan="8" class="text-center py-5" style="color:#94A3B8;">
               <i class="fas fa-hourglass-half fa-2x mb-2 d-block" style="color:#E2E8F0;" aria-hidden="true"></i>
-              Chưa có yêu cầu nào
+              {% if payment_request_query %}Không tìm thấy yêu cầu phù hợp{% else %}Chưa có yêu cầu nào{% endif %}
             </td>
           </tr>
           {% endfor %}

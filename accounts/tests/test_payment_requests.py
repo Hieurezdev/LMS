@@ -112,6 +112,34 @@ class PaymentRequestFlowTests(TestCase):
             self.assertEqual(payment_request.payment.student, self.student)
             self.assertTrue(payment_request.payment.receipt_pdf)
 
+    def test_queue_search_filters_requests(self):
+        PaymentRequest.objects.create(
+            student_name="Nguyễn Văn A", classroom_name="10A1",
+            subject_name="Toán", teacher_name="Cô Lan",
+            payment_period_name="Đợt 1", amount=125000,
+            payer_phone="0900000000",
+        )
+        PaymentRequest.objects.create(
+            student_name="Trần Thị B", classroom_name="11B2",
+            subject_name="Lý", teacher_name="Thầy Minh",
+            payment_period_name="Đợt 2", amount=150000,
+            payer_phone="0911111111",
+        )
+        self.client.force_login(self.admin)
+        with translation.override("en"):
+            url = reverse("payment_request_queue")
+            response = self.client.get(url, {"q": "10A1"})
+            phone_response = self.client.get(url, {"q": "0911111111"})
+            empty_response = self.client.get(url, {"q": "không có"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nguyễn Văn A")
+        self.assertNotContains(response, "Trần Thị B")
+        self.assertEqual(response.context["payment_request_query"], "10A1")
+        self.assertContains(phone_response, "Trần Thị B")
+        self.assertNotContains(phone_response, "Nguyễn Văn A")
+        self.assertContains(empty_response, "Không tìm thấy yêu cầu phù hợp")
+
     def test_submission_rejects_an_unselected_student(self):
         with translation.override("en"):
             response = self.client.post(reverse("public_payment_request"), {
