@@ -170,9 +170,9 @@
       }
     });
     nameInput.addEventListener('blur', () => setTimeout(() => suggestions.classList.add('d-none'), 150));
-    paymentList.addEventListener('scroll', () => suggestions.classList.add('d-none'));
-    window.addEventListener('scroll', () => suggestions.classList.add('d-none'));
-    window.addEventListener('resize', () => suggestions.classList.add('d-none'));
+    paymentList.addEventListener('scroll', positionSuggestions);
+    window.addEventListener('scroll', positionSuggestions);
+    window.addEventListener('resize', positionSuggestions);
     row.querySelector('.amount-input').addEventListener('input', updateTotal);
     row.querySelectorAll('.quick-amount').forEach(button => button.addEventListener('click', () => {
       row.querySelector('.amount-input').value = button.dataset.amount;
