@@ -123,6 +123,8 @@
     const suggestions = row.querySelector('.student-suggestions');
     suggestions.classList.remove('position-absolute', 'w-100');
     suggestions.classList.add('payment-student-suggestions');
+    suggestions.style.position = 'fixed';
+    suggestions.style.zIndex = '1055';
     document.body.appendChild(suggestions);
     const positionSuggestions = () => {
       const inputBounds = nameInput.getBoundingClientRect();
