@@ -930,7 +930,7 @@ def student_list(request):
         students = students.filter(classroom_id=classroom_id)
         
     attach_payment_period_amounts(students)
-    students = sort_students_for_lists(students)
+    students = sort_students_by_given_name(students)
     
     return render(request, 'lms_manager/student_list.html', {
         'students': students,
@@ -1078,7 +1078,7 @@ def student_list_export(request):
         students = students.filter(classroom_id=classroom_id)
     students = list(students.order_by('name'))
     attach_payment_period_amounts(students)
-    students = sort_students_for_lists(students)
+    students = sort_students_by_given_name(students)
     rows = []
     for index, student in enumerate(students, start=1):
         rows.append([

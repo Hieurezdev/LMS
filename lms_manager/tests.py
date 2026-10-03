@@ -350,6 +350,25 @@ class LMSManagerQueryTest(TestCase):
             ['Trần Minh An', 'Lê Quốc Anh', 'Nguyễn Văn Bình'],
         )
 
+    def test_student_list_and_export_sort_by_given_name(self):
+        for name in ('Nguyễn Văn Bình', 'Trần Minh An', 'Lê Quốc Anh'):
+            Student.objects.create(name=name, classroom=self.classroom)
+
+        with translation.override('en'):
+            response = self.client.get(reverse('student_list'))
+            export = self.client.get(reverse('student_list_export'))
+
+        listed_names = [student.name for student in response.context['students']]
+        self.assertEqual(listed_names[:3], ['Trần Minh An', 'Lê Quốc Anh', 'Nguyễn Văn Bình'])
+
+        from openpyxl import load_workbook
+        worksheet = load_workbook(io.BytesIO(export.content), data_only=True).active
+        exported_names = [worksheet.cell(row, 2).value for row in range(1, worksheet.max_row + 1)]
+        self.assertEqual(
+            [name for name in exported_names if name in listed_names][:3],
+            ['Trần Minh An', 'Lê Quốc Anh', 'Nguyễn Văn Bình'],
+        )
+
     def test_excel_import_uses_the_selected_classroom_and_teacher(self):
         upload = SimpleUploadedFile(
             'students.csv',
