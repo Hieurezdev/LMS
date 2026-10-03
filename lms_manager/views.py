@@ -2052,16 +2052,27 @@ def teacher_detail(request, pk):
 
 @require_POST
 def teacher_classroom_student_remove(request, teacher_id, classroom_id, student_id):
-    """Remove a student from a teacher's class without deleting their record or payments."""
+    """Delete a student from the LMS after backing up related data."""
     teacher = get_object_or_404(Teacher, pk=teacher_id)
     classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
     student = get_object_or_404(Student, pk=student_id, classroom=classroom)
+    if request.POST.get('return_to') == 'classroom':
+        destination = redirect('classroom_detail', pk=classroom.pk)
+    else:
+        destination = redirect('teacher_detail', pk=teacher.pk)
+    backup_path = prepare_delete_backup(request, f'student-{student.pk}')
+    if backup_path is None:
+        return destination
 
-    Enrollment.objects.filter(student=student, teacher=teacher).delete()
-    student.classroom = None
-    student.save(update_fields=['classroom'])
-    messages.success(request, f'Đã đưa {student.name} ra khỏi lớp {classroom.name}. Hồ sơ và các phiếu thu đã được giữ lại.')
-    return redirect('teacher_detail', pk=teacher.pk)
+    student_name = student.name
+    payment_count = student.payments.count()
+    with transaction.atomic():
+        student.delete()
+    messages.success(
+        request,
+        f'Đã xóa {student_name} khỏi danh sách học sinh cùng {payment_count} giao dịch liên quan. Backup trước xóa: {backup_path.name}',
+    )
+    return destination
 
 
 TEACHER_SETTLEMENT_RATE = Decimal('0.80')

@@ -243,10 +243,11 @@
                                     <a href="{% url 'student_edit' s.id %}" class="btn btn-outline-secondary btn-xs" title="Sửa">
                                       <i class="fas fa-edit"></i>
                                     </a>
-                                    <form method="post" action="{% url 'teacher_classroom_student_remove' report.teacher.id classroom.id s.id %}" class="d-inline" onsubmit="return confirm('Đưa {{ s.name|escapejs }} ra khỏi lớp {{ classroom.name|escapejs }}? Hồ sơ và phiếu thu vẫn được giữ lại.');">
+                                    <form method="post" action="{% url 'teacher_classroom_student_remove' report.teacher.id classroom.id s.id %}" class="d-inline" onsubmit="return confirm('Xóa {{ s.name|escapejs }} khỏi toàn bộ danh sách học sinh? Các giao dịch học phí liên quan cũng sẽ bị xóa. Hệ thống sẽ tạo backup trước khi xóa.');">
                                       {% csrf_token %}
-                                      <button type="submit" class="btn btn-outline-danger btn-xs" title="Đưa ra khỏi lớp">
-                                        <i class="fas fa-user-minus"></i>
+                                      <input type="hidden" name="return_to" value="classroom">
+                                      <button type="submit" class="btn btn-outline-danger btn-xs" title="Xóa học sinh khỏi hệ thống">
+                                        <i class="fas fa-trash-alt"></i>
                                       </button>
                                     </form>
                                 </div>

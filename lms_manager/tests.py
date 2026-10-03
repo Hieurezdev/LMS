@@ -418,7 +418,8 @@ class LMSManagerQueryTest(TestCase):
         self.assertFalse(Enrollment.objects.filter(student=unassigned_student, teacher=other_teacher).exists())
         self.assertTrue(Enrollment.objects.filter(student=unassigned_student, teacher=self.teacher).exists())
 
-    def test_teacher_can_remove_student_from_its_class_without_deleting_student_or_payments(self):
+    @patch('lms_manager.views.prepare_delete_backup', return_value=Path('backup.tar.gz'))
+    def test_teacher_removing_student_deletes_student_and_payments(self, _backup):
         with translation.override('en'):
             response = self.client.post(
                 reverse(
@@ -428,9 +429,37 @@ class LMSManagerQueryTest(TestCase):
             )
 
         self.assertEqual(response.status_code, 302)
-        self.student1.refresh_from_db()
-        self.assertIsNone(self.student1.classroom)
-        self.assertFalse(Enrollment.objects.filter(student=self.student1, teacher=self.teacher).exists())
+        self.assertFalse(Student.objects.filter(pk=self.student1.pk).exists())
+        self.assertFalse(Payment.objects.filter(pk=self.payment.pk).exists())
+        self.assertTrue(Student.objects.filter(pk=self.student2.pk).exists())
+
+    @patch('lms_manager.views.prepare_delete_backup', return_value=Path('backup.tar.gz'))
+    def test_classroom_removing_student_returns_to_classroom(self, _backup):
+        with translation.override('en'):
+            response = self.client.post(
+                reverse(
+                    'teacher_classroom_student_remove',
+                    args=[self.teacher.id, self.classroom.id, self.student1.id],
+                ),
+                {'return_to': 'classroom'},
+            )
+            classroom_url = reverse('classroom_detail', args=[self.classroom.id])
+
+        self.assertEqual(response.url, classroom_url)
+        self.assertFalse(Student.objects.filter(pk=self.student1.pk).exists())
+
+    @patch('lms_manager.views.prepare_delete_backup', return_value=None)
+    def test_student_removal_keeps_data_when_backup_fails(self, _backup):
+        with translation.override('en'):
+            response = self.client.post(
+                reverse(
+                    'teacher_classroom_student_remove',
+                    args=[self.teacher.id, self.classroom.id, self.student1.id],
+                ),
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Student.objects.filter(pk=self.student1.pk).exists())
         self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
 
     @patch('lms_manager.models.Payment.generate_receipt_pdf')
