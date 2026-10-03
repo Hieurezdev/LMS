@@ -121,6 +121,9 @@
     const nameInput = row.querySelector('.student-name-input');
     const studentIdInput = row.querySelector('.student-id-input');
     const suggestions = row.querySelector('.student-suggestions');
+    suggestions.classList.remove('position-absolute', 'w-100');
+    suggestions.classList.add('payment-student-suggestions');
+    document.body.appendChild(suggestions);
     const positionSuggestions = () => {
       const inputBounds = nameInput.getBoundingClientRect();
       suggestions.style.left = `${inputBounds.left}px`;
@@ -168,6 +171,7 @@
     });
     nameInput.addEventListener('blur', () => setTimeout(() => suggestions.classList.add('d-none'), 150));
     paymentList.addEventListener('scroll', () => suggestions.classList.add('d-none'));
+    window.addEventListener('scroll', () => suggestions.classList.add('d-none'));
     window.addEventListener('resize', () => suggestions.classList.add('d-none'));
     row.querySelector('.amount-input').addEventListener('input', updateTotal);
     row.querySelectorAll('.quick-amount').forEach(button => button.addEventListener('click', () => {
@@ -175,7 +179,7 @@
       updateTotal();
     }));
     row.querySelectorAll('.period-input').forEach(input => input.addEventListener('change', () => { input.closest('label').classList.toggle('active', input.checked); updateTotal(); }));
-    row.querySelector('.remove-row').addEventListener('click', () => { row.remove(); updateTotal(); });
+    row.querySelector('.remove-row').addEventListener('click', () => { suggestions.remove(); row.remove(); updateTotal(); });
     paymentList.appendChild(row);
     if (studentToPrefill) selectStudent(studentToPrefill);
   }

@@ -839,8 +839,9 @@ a:hover { color: var(--primary-dark); }
 .payment-create-page .batch-payment-row:only-child {
   flex-basis: 100%;
 }
-.payment-create-page .batch-payment-list .student-suggestions {
-  position: fixed !important;
+.payment-student-suggestions {
+  position: fixed;
+  z-index: 1055 !important;
 }
 
 @media (max-width: 420px) {
