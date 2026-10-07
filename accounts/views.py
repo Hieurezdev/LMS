@@ -252,6 +252,7 @@ def approve_payment_request(request, pk):
         .filter(request_group=payment_request.request_group, status=PaymentRequest.STATUS_PENDING)
         .order_by("created_at", "pk")
     )
+    collected_at = timezone.now()
     payments = []
     for item in grouped_requests:
         if item.enrollment_id:
@@ -297,17 +298,20 @@ def approve_payment_request(request, pk):
             teacher=enrollment.teacher,
             payment_period=period,
             amount=item.amount,
+            payment_date=timezone.localdate(collected_at),
+            collected_at=collected_at,
             payment_method=item.payment_method,
         ))
         item.payment = payments[-1]
         item.status = PaymentRequest.STATUS_APPROVED
         item.reviewed_by = request.user
-        item.reviewed_at = timezone.now()
+        item.reviewed_at = collected_at
 
     for item in grouped_requests:
         item.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
     batch = PaymentBatch.objects.create(
-        payment_date=timezone.localdate(),
+        payment_date=timezone.localdate(collected_at),
+        created_at=collected_at,
         created_by=request.user,
     )
     batch.payments.add(*payments)

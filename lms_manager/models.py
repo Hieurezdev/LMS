@@ -204,7 +204,9 @@ class Payment(models.Model):
     payment_period = models.ForeignKey(PaymentPeriod, on_delete=models.CASCADE, related_name="payments", verbose_name="Đợt đóng tiền")
     amount = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Số tiền đóng")
     payment_date = models.DateField(default=timezone.now, verbose_name="Ngày đóng")
-    collected_at = models.DateTimeField(auto_now_add=True, null=True, blank=True, verbose_name="Giờ thu")
+    collected_at = models.DateTimeField(
+        default=timezone.now, null=True, blank=True, editable=False, verbose_name="Giờ thu"
+    )
     payment_method = models.CharField(
         max_length=20,
         choices=PAYMENT_METHOD_CHOICES,
@@ -232,7 +234,7 @@ class Payment(models.Model):
             pdf_io.seek(0)
             if self.receipt_pdf:
                 self.receipt_pdf.storage.delete(self.receipt_pdf.name)
-            filename = f"receipt_{self.id}_a5_v5.pdf"
+            filename = f"receipt_{self.id}_a5_v6.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             Payment.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 
@@ -245,7 +247,7 @@ class PaymentBatch(models.Model):
     """A single collection session that may contain several payment records."""
     payments = models.ManyToManyField(Payment, related_name='batches')
     payment_date = models.DateField(default=timezone.now, verbose_name="Ngày thu")
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, blank=True, editable=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -283,7 +285,7 @@ class PaymentBatch(models.Model):
             pdf_io.seek(0)
             if self.receipt_pdf:
                 self.receipt_pdf.storage.delete(self.receipt_pdf.name)
-            filename = f"batch_receipt_{self.id}_a5_v18.pdf"
+            filename = f"batch_receipt_{self.id}_a5_v19.pdf"
             self.receipt_pdf.save(filename, ContentFile(pdf_io.read()), save=False)
             PaymentBatch.objects.filter(pk=self.pk).update(receipt_pdf=self.receipt_pdf)
 

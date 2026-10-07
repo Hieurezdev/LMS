@@ -1436,7 +1436,10 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
             prepared_items.append((student, teacher, enrollment.subject, period_num, amount))
 
     with transaction.atomic():
-        batch = PaymentBatch.objects.create(payment_date=payment_date, created_by=created_by)
+        collected_at = timezone.now()
+        batch = PaymentBatch.objects.create(
+            payment_date=payment_date, created_at=collected_at, created_by=created_by
+        )
         payments = []
         for student, teacher, subject, period_num, amount in prepared_items:
             period, _ = PaymentPeriod.objects.get_or_create(
@@ -1450,6 +1453,7 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
                 payment_period=period,
                 amount=amount,
                 payment_date=payment_date,
+                collected_at=collected_at,
                 payment_method=payment_method,
             )
             # Retain the legacy status for pages that still display it.  The
@@ -1809,7 +1813,7 @@ def payment_receipt(request, pk):
     if (
         not payment.receipt_pdf
         or not os.path.exists(payment.receipt_pdf.path)
-        or not payment.receipt_pdf.name.endswith('_a5_v5.pdf')
+        or not payment.receipt_pdf.name.endswith('_a5_v6.pdf')
     ):
         payment.generate_receipt_pdf()
         payment.refresh_from_db()
@@ -1831,7 +1835,7 @@ def payment_batch_receipt(request, pk):
     if (
         not batch.receipt_pdf
         or not os.path.exists(batch.receipt_pdf.path)
-        or not batch.receipt_pdf.name.endswith('_a5_v18.pdf')
+        or not batch.receipt_pdf.name.endswith('_a5_v19.pdf')
     ):
         batch.generate_receipt_pdf()
         batch.refresh_from_db()

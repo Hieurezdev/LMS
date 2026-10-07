@@ -62,7 +62,7 @@
             <th>Giảng viên</th>
             <th>Đợt đóng tiền</th>
             <th style="text-align:right;">Số tiền</th>
-            <th>Ngày đóng</th>
+            <th>Ngày đóng / thời điểm ghi nhận</th>
             <th style="text-align:right;">Hành động</th>
           </tr>
         </thead>
@@ -90,7 +90,10 @@
               <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:4px 10px;">{{ p.payment_period.name }}</span>
             </td>
             <td style="text-align:right;" class="fw-bold text-success">{{ p.amount|floatformat:0|intcomma }} VNĐ</td>
-            <td style="color:#94A3B8;font-size:12.5px;">{{ p.payment_date|date:"d/m/Y" }}</td>
+            <td style="color:#94A3B8;font-size:12.5px;">
+              {{ p.payment_date|date:"d/m/Y" }}
+              {% if p.collected_at %}<div>Ghi nhận: {{ p.collected_at|date:"d/m/Y H:i" }}</div>{% endif %}
+            </td>
             <td style="text-align:right;">
               <div class="d-flex justify-content-end gap-1">
                 {% if p.receipt_pdf %}

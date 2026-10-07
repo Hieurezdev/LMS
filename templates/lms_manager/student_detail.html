@@ -110,7 +110,7 @@
                 <th>Giảng viên</th>
                 <th>Trạng thái</th>
                 <th style="text-align:right;">Số tiền</th>
-                <th style="text-align:center;">Ngày đóng</th>
+                <th style="text-align:center;">Ngày đóng / thời điểm ghi nhận</th>
                 <th class="no-export" style="text-align:right;">Hành động</th>
               </tr>
             </thead>
@@ -136,6 +136,7 @@
                 </td>
                 <td style="text-align:center;color:#94A3B8;font-size:12.5px;">
                   {% if r.date %}{{ r.date|date:"d/m/Y" }}{% else %}-{% endif %}
+                  {% if r.payment.collected_at %}<div>Ghi nhận: {{ r.payment.collected_at|date:"d/m/Y H:i" }}</div>{% endif %}
                 </td>
                 <td style="text-align:right;" class="no-export">
                   {% if r.status == "Đã đóng" %}

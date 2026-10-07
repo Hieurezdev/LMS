@@ -1,10 +1,12 @@
 import json
+from io import BytesIO
 from tempfile import TemporaryDirectory
 
+from pypdf import PdfReader
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from django.utils import translation
+from django.utils import timezone, translation
 
 from lms_manager.models import (
     ClassRoom,
@@ -111,6 +113,20 @@ class PaymentRequestFlowTests(TestCase):
             self.assertEqual(batch.payments.count(), 1)
             self.assertEqual(payment_request.payment.student, self.student)
             self.assertTrue(payment_request.payment.receipt_pdf)
+            self.assertEqual(payment_request.payment.collected_at, payment_request.reviewed_at)
+            self.assertEqual(batch.created_at, payment_request.payment.collected_at)
+            self.assertEqual(payment_request.payment.payment_date, timezone.localdate(batch.created_at))
+            queue_response = self.client.get(queue_url)
+            collected_time = timezone.localtime(batch.created_at).strftime('%d/%m/%Y %H:%M')
+            self.assertContains(queue_response, f'Thu: {collected_time}')
+            for receipt_url in (
+                reverse("payment_receipt", args=[payment_request.payment_id]),
+                reverse("payment_batch_receipt", args=[batch.pk]),
+            ):
+                receipt_response = self.client.get(receipt_url)
+                self.assertEqual(receipt_response.status_code, 200)
+                receipt_text = PdfReader(BytesIO(receipt_response.content)).pages[0].extract_text()
+                self.assertIn(collected_time[-5:], receipt_text)
 
     def test_queue_search_filters_requests(self):
         PaymentRequest.objects.create(
@@ -226,21 +242,24 @@ class PaymentRequestFlowTests(TestCase):
         self.assertEqual(Payment.objects.count(), 0)
         self.client.force_login(self.admin)
         first_request = PaymentRequest.objects.order_by("pk").first()
-        approve_response = self.client.post(
-            reverse("approve_payment_request", args=[first_request.pk])
-        )
+        with translation.override("en"):
+            approve_response = self.client.post(
+                reverse("approve_payment_request", args=[first_request.pk])
+            )
         self.assertEqual(approve_response.status_code, 302)
         self.assertEqual(Payment.objects.count(), 2)
         self.assertEqual(PaymentBatch.objects.count(), 1)
         batch = PaymentBatch.objects.get()
-        self.assertEqual(
-            approve_response.url,
-            reverse("payment_batch_receipt", args=[batch.pk]),
-        )
+        with translation.override("en"):
+            self.assertEqual(
+                approve_response.url,
+                reverse("payment_batch_receipt", args=[batch.pk]),
+            )
         self.assertEqual(
             PaymentRequest.objects.filter(status=PaymentRequest.STATUS_APPROVED).count(),
             2,
         )
+        self.assertEqual(set(Payment.objects.values_list("collected_at", flat=True)), {batch.created_at})
 
     def test_invalid_batch_shows_error_without_creating_request(self):
         with translation.override("en"):

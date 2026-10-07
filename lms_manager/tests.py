@@ -108,14 +108,14 @@ class LMSManagerQueryTest(TestCase):
     def test_receipts_show_saved_collection_time(self):
         self.assertIsNotNone(self.payment.collected_at)
         receipt_html = render_to_string('lms_manager/receipt_pdf.html', {'payment': self.payment})
-        payment_time = timezone.localtime(self.payment.collected_at).strftime('%H:%M')
-        self.assertIn(f'Giờ thu: {payment_time}', receipt_html)
+        payment_time = timezone.localtime(self.payment.collected_at).strftime('%d/%m/%Y %H:%M')
+        self.assertIn(f'Ghi nhận lúc: {payment_time}', receipt_html)
 
         batch = PaymentBatch.objects.create()
         batch.payments.add(self.payment)
         batch_html = render_to_string('lms_manager/batch_receipt_pdf.html', {'batch': batch})
-        batch_time = timezone.localtime(batch.created_at).strftime('%H:%M')
-        self.assertIn(f'Giờ thu: {batch_time}', batch_html)
+        batch_time = timezone.localtime(batch.created_at).strftime('%d/%m/%Y %H:%M')
+        self.assertIn(f'Ghi nhận lúc: {batch_time}', batch_html)
 
     def test_old_payment_receipt_does_not_invent_collection_time(self):
         Payment.objects.filter(pk=self.payment.pk).update(collected_at=None)
@@ -123,7 +123,7 @@ class LMSManagerQueryTest(TestCase):
 
         receipt_html = render_to_string('lms_manager/receipt_pdf.html', {'payment': self.payment})
 
-        self.assertNotIn('Giờ thu:', receipt_html)
+        self.assertNotIn('Ghi nhận lúc:', receipt_html)
 
     def test_payment_list_searches_by_payment_details(self):
         other_student = Student.objects.create(name='Other Student', classroom=self.classroom)
@@ -706,6 +706,14 @@ class LMSManagerQueryTest(TestCase):
         )
         self.assertTrue(all(payment.student == self.student2 for payment in batch.payments.all()))
         self.assertTrue(all(payment.amount == 500000 for payment in batch.payments.all()))
+        self.assertTrue(all(payment.collected_at == batch.created_at for payment in batch.payments.all()))
+        self.assertTrue(all(payment.payment_date.isoformat() == '2026-07-19' for payment in batch.payments.all()))
+        with translation.override('en'):
+            list_response = self.client.get(reverse('payment_list'))
+            student_response = self.client.get(reverse('student_detail', args=[self.student2.pk]))
+        recorded_time = timezone.localtime(batch.created_at).strftime('%d/%m/%Y %H:%M')
+        self.assertContains(list_response, f'Ghi nhận: {recorded_time}')
+        self.assertContains(student_response, f'Ghi nhận: {recorded_time}')
 
     @patch('lms_manager.models.PaymentBatch.generate_receipt_pdf')
     def test_selected_payments_can_create_a_combined_receipt(self, _batch_pdf):

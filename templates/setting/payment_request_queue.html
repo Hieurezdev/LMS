@@ -57,7 +57,7 @@
             <th>Học sinh</th>
             <th>Lớp / Môn</th>
             <th>Giảng viên / Đợt</th>
-            <th>Thời gian</th>
+            <th>Thời gian gửi / thu</th>
             <th class="text-end">Số tiền</th>
             <th>Trạng thái</th>
             <th class="text-end">Hành động</th>
@@ -74,7 +74,12 @@
             <td><strong>{{ item.student_name }}</strong><br><small class="text-secondary">{{ item.payer_phone }}</small></td>
             <td>{{ item.classroom_name }}<br><small class="text-secondary">{{ item.subject_name }}</small></td>
             <td>{{ item.teacher_name }}<br><small class="text-secondary">{{ item.payment_period_name }}</small></td>
-            <td class="text-secondary small">{{ item.created_at|date:'d/m/Y H:i' }}</td>
+            <td class="text-secondary small">
+              <div>Gửi: {{ item.created_at|date:'d/m/Y H:i' }}</div>
+              {% if item.status == 'approved' and item.payment and item.payment.collected_at %}
+                <div>Thu: {{ item.payment.collected_at|date:'d/m/Y H:i' }}</div>
+              {% endif %}
+            </td>
             <td class="text-end fw-bold text-success">{{ item.amount|floatformat:0|intcomma }} VNĐ</td>
             <td>
               <span class="status-badge {% if item.status == 'pending' %}bg-warning text-dark{% elif item.status == 'approved' %}status-paid{% else %}status-unpaid{% endif %}">
