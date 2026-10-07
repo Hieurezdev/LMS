@@ -48,6 +48,7 @@
         </td>
         <td class="receipt-number">
           <strong>Ngày thu: {{ payment.payment_date|date:"d/m/Y" }}</strong>
+          {% if payment.collected_at %}<br><strong>Giờ thu: {{ payment.collected_at|date:"H:i" }}</strong>{% endif %}
         </td>
       </tr>
     </table>

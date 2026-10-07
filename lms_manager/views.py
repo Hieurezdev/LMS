@@ -1809,7 +1809,7 @@ def payment_receipt(request, pk):
     if (
         not payment.receipt_pdf
         or not os.path.exists(payment.receipt_pdf.path)
-        or not payment.receipt_pdf.name.endswith('_a5_v4.pdf')
+        or not payment.receipt_pdf.name.endswith('_a5_v5.pdf')
     ):
         payment.generate_receipt_pdf()
         payment.refresh_from_db()
@@ -1831,7 +1831,7 @@ def payment_batch_receipt(request, pk):
     if (
         not batch.receipt_pdf
         or not os.path.exists(batch.receipt_pdf.path)
-        or not batch.receipt_pdf.name.endswith('_a5_v17.pdf')
+        or not batch.receipt_pdf.name.endswith('_a5_v18.pdf')
     ):
         batch.generate_receipt_pdf()
         batch.refresh_from_db()

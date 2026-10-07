@@ -7,7 +7,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from django.utils import translation
+from django.template.loader import render_to_string
+from django.utils import timezone, translation
 from lms_manager.models import ClassRoom, Subject, Teacher, Student, Enrollment, PaymentPeriod, Payment, PaymentBatch, PaymentRequest, TeacherSettlement
 from lms_manager.views import assign_teacher_to_classroom, sort_students_by_given_name
 
@@ -103,6 +104,26 @@ class LMSManagerQueryTest(TestCase):
             )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '100,000')
+
+    def test_receipts_show_saved_collection_time(self):
+        self.assertIsNotNone(self.payment.collected_at)
+        receipt_html = render_to_string('lms_manager/receipt_pdf.html', {'payment': self.payment})
+        payment_time = timezone.localtime(self.payment.collected_at).strftime('%H:%M')
+        self.assertIn(f'Giờ thu: {payment_time}', receipt_html)
+
+        batch = PaymentBatch.objects.create()
+        batch.payments.add(self.payment)
+        batch_html = render_to_string('lms_manager/batch_receipt_pdf.html', {'batch': batch})
+        batch_time = timezone.localtime(batch.created_at).strftime('%H:%M')
+        self.assertIn(f'Giờ thu: {batch_time}', batch_html)
+
+    def test_old_payment_receipt_does_not_invent_collection_time(self):
+        Payment.objects.filter(pk=self.payment.pk).update(collected_at=None)
+        self.payment.refresh_from_db()
+
+        receipt_html = render_to_string('lms_manager/receipt_pdf.html', {'payment': self.payment})
+
+        self.assertNotIn('Giờ thu:', receipt_html)
 
     def test_payment_list_searches_by_payment_details(self):
         other_student = Student.objects.create(name='Other Student', classroom=self.classroom)
