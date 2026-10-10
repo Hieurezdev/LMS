@@ -31,6 +31,7 @@ urlpatterns = [
     # Teacher
     path('teachers/', views.teacher_list, name='teacher_list'),
     path('teachers/<int:pk>/', views.teacher_detail, name='teacher_detail'),
+    path('teachers/<int:pk>/export-classes/', views.teacher_classes_export, name='teacher_classes_export'),
     path('teachers/add/', views.teacher_create, name='teacher_add'),
     path('teachers/delete-all/', views.teacher_delete_all, name='teacher_delete_all'),
     path('teachers/<int:pk>/edit/', views.teacher_update, name='teacher_edit'),

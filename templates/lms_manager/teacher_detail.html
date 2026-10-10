@@ -31,6 +31,11 @@
       <a href="{% url 'teacher_import_excel' teacher.id %}" class="btn btn-outline-success">
         <i class="fas fa-file-excel"></i> Nhập Excel
       </a>
+      {% if classroom_reports %}
+      <a href="{% url 'teacher_classes_export' teacher.id %}" class="btn btn-outline-success">
+        <i class="fas fa-file-export"></i> Xuất Excel tất cả lớp
+      </a>
+      {% endif %}
       <a href="{% url 'teacher_list' %}" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-left"></i> Quay lại
       </a>

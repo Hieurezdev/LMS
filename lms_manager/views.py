@@ -9,7 +9,7 @@ from pathlib import Path
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
-from django.http import FileResponse, HttpResponseForbidden, JsonResponse, HttpResponse
+from django.http import FileResponse, HttpResponseForbidden, Http404, JsonResponse, HttpResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.core.management import call_command, CommandError
@@ -985,16 +985,12 @@ def sort_students_by_given_name(students):
     )
 
 
-def formatted_excel_response(title, headers, rows, filename, details=None):
-    """Create a plain, single-page A4 XLSX download."""
-    from openpyxl import Workbook
+def format_excel_sheet(sheet, title, headers, rows, details=None, fit_to_height=1):
+    """Populate one A4 worksheet with the existing roster layout."""
     from openpyxl.styles import Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.page import PageMargins
 
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = 'Danh sach'
     sheet.sheet_view.showGridLines = False
     column_count = len(headers)
     last_column = get_column_letter(column_count)
@@ -1053,11 +1049,13 @@ def formatted_excel_response(title, headers, rows, filename, details=None):
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.page_setup.orientation = sheet.ORIENTATION_LANDSCAPE
     sheet.page_setup.fitToWidth = 1
-    sheet.page_setup.fitToHeight = 1
+    sheet.page_setup.fitToHeight = fit_to_height
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4, header=0.15, footer=0.15)
     sheet.print_options.horizontalCentered = True
 
+
+def excel_download_response(workbook, filename):
     buffer = io.BytesIO()
     workbook.save(buffer)
     response = HttpResponse(
@@ -1066,6 +1064,30 @@ def formatted_excel_response(title, headers, rows, filename, details=None):
     )
     response['Content-Disposition'] = f"attachment; filename*=UTF-8''{filename}"
     return response
+
+
+def formatted_excel_response(title, headers, rows, filename, details=None):
+    """Create a formatted A4 XLSX download."""
+    from openpyxl import Workbook
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Danh sach'
+    format_excel_sheet(sheet, title, headers, rows, details)
+    return excel_download_response(workbook, filename)
+
+
+def unique_excel_sheet_name(classroom_name, used_names):
+    """Fit classroom names within Excel's worksheet naming rules."""
+    base_name = re.sub(r'[][\\:*?/]', '-', classroom_name).strip().strip("'") or 'Lớp'
+    candidate = base_name[:31]
+    suffix = 2
+    while candidate.casefold() in used_names:
+        ending = f' ({suffix})'
+        candidate = base_name[:31 - len(ending)] + ending
+        suffix += 1
+    used_names.add(candidate.casefold())
+    return candidate
 
 
 def student_list_export(request):
@@ -1163,6 +1185,58 @@ def classroom_export(request, pk):
         rows,
         f'danh_sach_lop_{classroom.id}.xlsx',
         details,
+    )
+
+
+def teacher_classes_export(request, pk):
+    from openpyxl import Workbook
+
+    teacher = get_object_or_404(Teacher, pk=pk)
+    classrooms = list(teacher.classes.order_by('name', 'id'))
+    if not classrooms:
+        raise Http404('Giảng viên chưa được phân công lớp học.')
+    enrollments_by_classroom = defaultdict(list)
+    enrollments = Enrollment.objects.filter(
+        teacher=teacher, student__classroom__in=classrooms
+    ).select_related('student', 'subject').prefetch_related('student__payments__payment_period')
+    for enrollment in enrollments:
+        enrollments_by_classroom[enrollment.student.classroom_id].append(enrollment)
+
+    workbook = Workbook()
+    used_names = set()
+    headers = ['STT', 'Học sinh', 'Môn học', 'Bắt đầu', *[f'Đợt {period}' for period in range(1, 9)]]
+    for class_index, classroom in enumerate(classrooms):
+        sheet = workbook.active if class_index == 0 else workbook.create_sheet()
+        sheet.title = unique_excel_sheet_name(classroom.name, used_names)
+        class_enrollments = enrollments_by_classroom[classroom.id]
+        rows = []
+        if not class_enrollments:
+            rows.append(['', 'Chưa có học sinh', '', '', *['' for _ in range(8)]])
+        else:
+            attach_payment_period_amounts(
+                [enrollment.student for enrollment in class_enrollments], teacher=teacher
+            )
+            class_enrollments.sort(key=lambda enrollment: enrollment.student.name.casefold())
+            for index, enrollment in enumerate(class_enrollments, start=1):
+                student = enrollment.student
+                rows.append([
+                    index, student.name, enrollment.subject.name,
+                    student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
+                    *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+                ])
+
+        format_excel_sheet(
+            sheet,
+            f'DANH SÁCH HỌC SINH - {classroom.name}',
+            headers,
+            rows,
+            [('Lớp', classroom.name), ('Giảng viên', teacher.name)],
+            fit_to_height=0,
+        )
+
+    return excel_download_response(
+        workbook,
+        f'danh_sach_cac_lop_giang_vien_{teacher.id}.xlsx',
     )
 
 

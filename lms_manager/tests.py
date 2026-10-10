@@ -314,6 +314,85 @@ class LMSManagerQueryTest(TestCase):
                 self.assertEqual(header.border.top.style, 'thin')
                 self.assertEqual(header.border.bottom.style, 'thin')
 
+    def test_teacher_can_export_all_assigned_class_rosters_in_one_excel_file(self):
+        from openpyxl import load_workbook
+
+        second_classroom = ClassRoom.objects.create(name='10A2')
+        empty_classroom = ClassRoom.objects.create(name='10A3')
+        other_classroom = ClassRoom.objects.create(name='10B1')
+        self.teacher.classes.add(second_classroom, empty_classroom)
+        another_student = Student.objects.create(name='Alex Smith', classroom=second_classroom)
+        Student.objects.create(name='Not Enrolled', classroom=second_classroom)
+        Student.objects.create(name='Outside Student', classroom=other_classroom)
+        Enrollment.objects.create(student=another_student, teacher=self.teacher, subject=self.subject)
+
+        with translation.override('en'):
+            export_url = reverse('teacher_classes_export', args=[self.teacher.pk])
+            detail = self.client.get(reverse('teacher_detail', args=[self.teacher.pk]))
+            response = self.client.get(export_url)
+
+        self.assertContains(detail, export_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response['Content-Type'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        self.assertIn(f'danh_sach_cac_lop_giang_vien_{self.teacher.pk}.xlsx', response['Content-Disposition'])
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        self.assertEqual(workbook.sheetnames, ['10A1', '10A2', '10A3'])
+        expected_students = {
+            '10A1': ['Jane Doe', 'John Doe'],
+            '10A2': ['Alex Smith'],
+            '10A3': ['Chưa có học sinh'],
+        }
+        for sheet in workbook:
+            with self.subTest(classroom=sheet.title):
+                self.assertEqual(int(sheet.page_setup.paperSize), int(sheet.PAPERSIZE_A4))
+                self.assertEqual(sheet.page_setup.fitToWidth, 1)
+                self.assertEqual(sheet.page_setup.fitToHeight, 0)
+                self.assertEqual(sheet['B2'].value, sheet.title)
+                self.assertEqual(sheet['B3'].value, self.teacher.name)
+                header = next(cell for row in sheet.iter_rows() for cell in row if cell.value == 'STT')
+                data = list(sheet.iter_rows(min_row=header.row + 1, values_only=True))
+                self.assertEqual([row[1] for row in data], expected_students[sheet.title])
+                if sheet.title == '10A3':
+                    self.assertIsNone(data[0][0])
+                else:
+                    self.assertEqual([row[0] for row in data], list(range(1, len(data) + 1)))
+        paid_student = next(row for row in workbook['10A1'].values if row[1] == 'John Doe')
+        self.assertEqual(paid_student[4], 100000)
+
+    def test_teacher_class_export_uses_valid_unique_sheet_names(self):
+        from openpyxl import load_workbook
+
+        base_name = 'Lớp Toán rất dài / 10A học sáng thứ Hai'
+        first_classroom = ClassRoom.objects.create(name=base_name)
+        second_classroom = ClassRoom.objects.create(name=base_name)
+        self.teacher.classes.add(first_classroom, second_classroom)
+
+        with translation.override('en'):
+            response = self.client.get(reverse('teacher_classes_export', args=[self.teacher.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(io.BytesIO(response.content))
+        self.assertEqual(len(workbook.sheetnames), 3)
+        self.assertEqual(len(set(workbook.sheetnames)), 3)
+        for sheet_name in workbook.sheetnames:
+            self.assertLessEqual(len(sheet_name), 31)
+            self.assertNotIn('/', sheet_name)
+
+    def test_teacher_class_export_rejects_cashier_and_unknown_teacher(self):
+        cashier = get_user_model().objects.create_user(
+            username='class-export-cashier', password='safe-test-password'
+        )
+        with translation.override('en'):
+            url = reverse('teacher_classes_export', args=[self.teacher.pk])
+            self.assertEqual(self.client.get(reverse('teacher_classes_export', args=[999999])).status_code, 404)
+            unassigned_teacher = Teacher.objects.create(name='Unassigned')
+            self.assertEqual(self.client.get(reverse('teacher_classes_export', args=[unassigned_teacher.pk])).status_code, 404)
+            self.client.force_login(cashier)
+            self.assertEqual(self.client.get(url).status_code, 403)
+
     def test_student_list_paid_amount_is_derived_from_recorded_payments(self):
         self.payment_period.name = "Đợt 1"
         self.payment_period.save()
