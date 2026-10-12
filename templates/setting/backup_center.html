@@ -38,9 +38,14 @@
     <div class="col-12 col-xl-7">
       <div class="card border-0 shadow-sm rounded-4 p-4">
         <h5 class="fw-bold mb-3"><i class="fas fa-box-archive text-primary me-2"></i>Backup đã tạo và backup trước khi xóa</h5>
+        {% if unreadable_backup_count %}
+        <div class="alert alert-warning" role="alert">
+          Có {{ unreadable_backup_count }} bản backup không đọc được hoặc chưa hoàn tất. Không dùng các bản này để khôi phục dữ liệu.
+        </div>
+        {% endif %}
         {% if backups %}
         <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Tên file</th><th>Ngày tạo</th><th>Dung lượng</th><th></th></tr></thead><tbody>
-        {% for backup in backups %}<tr><td class="small">{{ backup.name }}</td><td class="small">{{ backup.created_at|date:'d/m/Y H:i' }}</td><td class="small">{{ backup.size|filesizeformat }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'backup_file_download' backup.name %}"><i class="fas fa-download"></i></a></td></tr>{% endfor %}
+        {% for backup in backups %}<tr><td class="small">{{ backup.name }}{% if backup.unreadable %} <span class="badge bg-danger">Không đọc được</span>{% endif %}</td><td class="small">{{ backup.created_at|date:'d/m/Y H:i' }}</td><td class="small">{{ backup.size|filesizeformat }}</td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'backup_file_download' backup.name %}"><i class="fas fa-download"></i></a></td></tr>{% endfor %}
         </tbody></table></div>
         {% else %}<div class="text-secondary small">Chưa có backup nào.</div>{% endif %}
       </div>

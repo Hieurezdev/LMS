@@ -67,16 +67,26 @@ class Command(BaseCommand):
                 encoding="utf-8",
             )
 
+            temporary_archive_path = None
             try:
-                with tarfile.open(archive_path, "w:gz") as archive:
+                with tempfile.NamedTemporaryFile(
+                    dir=archive_path.parent, prefix=".lms-backup-", suffix=".tmp", delete=False
+                ) as temporary_archive:
+                    temporary_archive_path = Path(temporary_archive.name)
+                with tarfile.open(temporary_archive_path, "w:gz") as archive:
                     archive.add(database_path, arcname="database.json")
                     archive.add(manifest_path, arcname="manifest.json")
                     media_root = Path(settings.MEDIA_ROOT)
                     if media_root.exists():
                         archive.add(media_root, arcname="media")
+                if archive_path.exists():
+                    raise CommandError(f"Backup file already exists: {archive_path}")
+                temporary_archive_path.replace(archive_path)
             except (OSError, tarfile.TarError) as exc:
-                archive_path.unlink(missing_ok=True)
                 raise CommandError(f"Could not create backup {archive_path}: {exc}") from exc
+            finally:
+                if temporary_archive_path is not None:
+                    temporary_archive_path.unlink(missing_ok=True)
 
         self.stdout.write(self.style.SUCCESS(f"Backup created: {archive_path}"))
         if options["keep"] is not None:

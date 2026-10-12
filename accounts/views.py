@@ -368,6 +368,7 @@ def profile_single(request, id):
 @admin_required
 def admin_panel(request):
     backup_paths = _list_backup_paths()
+    backups = [_backup_info(path) for path in backup_paths]
     return render(
         request,
         "setting/admin_panel.html",
@@ -389,7 +390,8 @@ def admin_panel(request):
                 status=PaymentRequest.STATUS_PENDING
             ).count(),
             "cashier_form": AdminCashierCreateForm(),
-            "backups": [_backup_info(path) for path in backup_paths],
+            "backups": backups,
+            "unreadable_backup_count": sum(backup["unreadable"] for backup in backups),
         },
     )
 
@@ -399,7 +401,10 @@ def admin_panel(request):
 def backup_center(request):
     backup_paths = _list_backup_paths()
     backups = [_backup_info(path) for path in backup_paths]
-    return render(request, "setting/backup_center.html", {"backups": backups})
+    return render(request, "setting/backup_center.html", {
+        "backups": backups,
+        "unreadable_backup_count": sum(backup["unreadable"] for backup in backups),
+    })
 
 
 def _list_backup_paths():
@@ -421,15 +426,29 @@ def _backup_info(backup_path):
     created_at = timezone.localtime(
         datetime.fromtimestamp(backup_path.stat().st_mtime, tz=datetime_timezone.utc)
     )
+    unreadable = False
     try:
         with tarfile.open(backup_path, "r:gz") as archive:
-            manifest = json.load(archive.extractfile("manifest.json"))
-        parsed_created_at = parse_datetime(manifest.get("created_at", ""))
+            manifest_file = archive.extractfile("manifest.json")
+            if manifest_file is None:
+                raise ValueError("Backup manifest is not a file")
+            manifest = json.load(manifest_file)
+        if not isinstance(manifest, dict):
+            raise ValueError("Backup manifest is not an object")
+        timestamp = manifest.get("created_at", "")
+        if not isinstance(timestamp, str):
+            raise ValueError("Backup timestamp is not text")
+        parsed_created_at = parse_datetime(timestamp)
         if parsed_created_at and timezone.is_aware(parsed_created_at):
             created_at = timezone.localtime(parsed_created_at)
-    except (OSError, KeyError, tarfile.TarError, json.JSONDecodeError):
-        pass
-    return {"name": backup_path.name, "created_at": created_at, "size": backup_path.stat().st_size}
+    except (OSError, KeyError, tarfile.TarError, ValueError, EOFError):
+        unreadable = True
+    return {
+        "name": backup_path.name,
+        "created_at": created_at,
+        "size": backup_path.stat().st_size,
+        "unreadable": unreadable,
+    }
 
 
 @login_required
