@@ -104,7 +104,6 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "lms_manager.context_processors.breadcrumb",
-                "lms_manager.context_processors.pending_payment_requests",
                 # 'django.template.context_processors.i18n',
                 # 'django.template.context_processors.media',
                 # 'django.template.context_processors.static',

@@ -8,12 +8,9 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import DatabaseError
-from django.db.models import Q
-from django.db import transaction
 from django.http import FileResponse, Http404
 from django.http.response import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.contrib import messages
@@ -29,7 +26,6 @@ from .forms import (
     ProfileUpdateForm,
 )
 from .models import User
-from lms_manager.models import Enrollment, Payment, PaymentBatch, PaymentPeriod, PaymentRequest, Student
 
 
 class RoleLoginView(LoginView):
@@ -51,128 +47,6 @@ def validate_username(request):
     username = request.GET.get("username", None)
     data = {"is_taken": User.objects.filter(username__iexact=username).exists()}
     return JsonResponse(data)
-
-
-@login_required
-@admin_required
-def payment_request_queue(request):
-    query = request.GET.get("q", "").strip()[:150]
-    requests = PaymentRequest.objects.select_related("reviewed_by", "payment").all()
-    if query:
-        requests = requests.filter(
-            Q(student_name__icontains=query)
-            | Q(classroom_name__icontains=query)
-            | Q(subject_name__icontains=query)
-            | Q(teacher_name__icontains=query)
-            | Q(payment_period_name__icontains=query)
-            | Q(payer_phone__icontains=query)
-        )
-    return render(request, "setting/payment_request_queue.html", {
-        "payment_requests": requests,
-        "payment_request_query": query,
-        "breadcrumb_items": [
-            {"label": "Giao dịch đóng tiền", "url": reverse("payment_list")},
-            {"label": "Hàng chờ giao dịch"},
-        ],
-    })
-
-
-@login_required
-@admin_required
-@require_POST
-@transaction.atomic
-def approve_payment_request(request, pk):
-    payment_request = get_object_or_404(
-        PaymentRequest.objects.select_for_update(),
-        pk=pk,
-        status=PaymentRequest.STATUS_PENDING,
-    )
-    grouped_requests = list(
-        PaymentRequest.objects.select_for_update()
-        .filter(request_group=payment_request.request_group, status=PaymentRequest.STATUS_PENDING)
-        .order_by("created_at", "pk")
-    )
-    collected_at = timezone.now()
-    payments = []
-    for item in grouped_requests:
-        if item.enrollment_id:
-            enrollment = Enrollment.objects.select_related(
-                "student__classroom", "subject", "teacher"
-            ).filter(pk=item.enrollment_id).first()
-            if enrollment is None or enrollment.student.classroom is None:
-                messages.error(request, "Không thể xác nhận: đăng ký học không còn hợp lệ.")
-                return redirect("payment_request_queue")
-            student = enrollment.student
-        else:
-            students = Student.objects.filter(
-                name__iexact=item.student_name.strip(),
-                classroom__name__iexact=item.classroom_name.strip(),
-            )
-            if students.count() != 1:
-                messages.error(request, "Không thể xác nhận: tên học sinh và lớp không xác định duy nhất.")
-                return redirect("payment_request_queue")
-            student = students.first()
-            enrollments = Enrollment.objects.filter(
-                student=student,
-                subject__name__iexact=item.subject_name.strip(),
-                teacher__name__iexact=item.teacher_name.strip(),
-            ).select_related("subject", "teacher")
-            if enrollments.count() != 1:
-                messages.error(request, "Không thể xác nhận: thông tin môn học hoặc giảng viên không khớp.")
-                return redirect("payment_request_queue")
-            enrollment = enrollments.first()
-        period, _ = PaymentPeriod.objects.get_or_create(
-            name=item.payment_period_name.strip(),
-            teacher=enrollment.teacher,
-            subject=enrollment.subject,
-        )
-        if Payment.objects.filter(
-            student=student, teacher=enrollment.teacher, payment_period=period
-        ).exists():
-            messages.error(request, "Học sinh này đã có giao dịch cho một đợt thu trong nhóm.")
-            return redirect("payment_request_queue")
-        payments.append(Payment.objects.create(
-            student=student,
-            classroom=student.classroom,
-            subject=enrollment.subject,
-            teacher=enrollment.teacher,
-            payment_period=period,
-            amount=item.amount,
-            payment_date=timezone.localdate(collected_at),
-            collected_at=collected_at,
-            payment_method=item.payment_method,
-        ))
-        item.payment = payments[-1]
-        item.status = PaymentRequest.STATUS_APPROVED
-        item.reviewed_by = request.user
-        item.reviewed_at = collected_at
-
-    for item in grouped_requests:
-        item.save(update_fields=["payment", "status", "reviewed_by", "reviewed_at"])
-    batch = PaymentBatch.objects.create(
-        payment_date=timezone.localdate(collected_at),
-        created_at=collected_at,
-        created_by=request.user,
-    )
-    batch.payments.add(*payments)
-    batch.generate_receipt_pdf()
-    messages.success(request, f"Đã xác nhận {len(payments)} khoản thu và tạo phiếu thu tổng.")
-    return redirect("payment_batch_receipt", pk=batch.pk)
-
-
-@login_required
-@admin_required
-@require_POST
-def reject_payment_request(request, pk):
-    payment_request = get_object_or_404(
-        PaymentRequest, pk=pk, status=PaymentRequest.STATUS_PENDING
-    )
-    payment_request.status = PaymentRequest.STATUS_REJECTED
-    payment_request.reviewed_by = request.user
-    payment_request.reviewed_at = timezone.now()
-    payment_request.save(update_fields=["status", "reviewed_by", "reviewed_at"])
-    messages.success(request, "Đã từ chối yêu cầu thu học phí.")
-    return redirect("payment_request_queue")
 
 
 @login_required
@@ -226,9 +100,6 @@ def admin_panel(request):
                 is_active=True,
             ).count(),
             "admin_count": User.objects.filter(is_superuser=True, is_active=True).count(),
-            "pending_payment_requests": PaymentRequest.objects.filter(
-                status=PaymentRequest.STATUS_PENDING
-            ).count(),
             "cashier_form": AdminCashierCreateForm(),
             "backups": backups,
             "unreadable_backup_count": sum(backup["unreadable"] for backup in backups),
