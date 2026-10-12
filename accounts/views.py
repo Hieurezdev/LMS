@@ -1,8 +1,6 @@
 import json
 import tarfile
 import tempfile
-import unicodedata
-import uuid
 from datetime import datetime, timezone as datetime_timezone
 from pathlib import Path
 
@@ -10,9 +8,9 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import DatabaseError
-from django.db.models import Prefetch, Q
+from django.db.models import Q
 from django.db import transaction
-from django.http import FileResponse, Http404, QueryDict
+from django.http import FileResponse, Http404
 from django.http.response import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
@@ -29,7 +27,6 @@ from .forms import (
     AdminCashierCreateForm,
     ApprovalAuthenticationForm,
     ProfileUpdateForm,
-    PublicPaymentRequestForm,
 )
 from .models import User
 from lms_manager.models import Enrollment, Payment, PaymentBatch, PaymentPeriod, PaymentRequest, Student
@@ -54,163 +51,6 @@ def validate_username(request):
     username = request.GET.get("username", None)
     data = {"is_taken": User.objects.filter(username__iexact=username).exists()}
     return JsonResponse(data)
-
-
-def public_payment_request(request):
-    """Accept a payment request without exposing the authenticated LMS area."""
-    if request.method == "POST":
-        batch_items = request.POST.get("batch_items")
-        if batch_items:
-            try:
-                items = json.loads(batch_items)
-            except (TypeError, json.JSONDecodeError):
-                items = None
-            if not isinstance(items, list) or not items:
-                form = PublicPaymentRequestForm(request.POST)
-                form.is_valid()
-                form.add_error(None, "Danh sách khoản thu không hợp lệ.")
-                return render(request, "accounts/payment_request.html", {"form": form})
-
-            cleaned_requests = []
-            batch_error = None
-            for index, item in enumerate(items, start=1):
-                if not isinstance(item, dict):
-                    batch_error = f"Khoản thu dòng {index} không hợp lệ."
-                    break
-                row_data = QueryDict("", mutable=True)
-                for field_name in (
-                    "student_id", "enrollment", "student_name", "classroom_name",
-                    "subject_name", "teacher_name", "amount", "payment_method",
-                ):
-                    if field_name in item:
-                        row_data[field_name] = item[field_name]
-                period_names = item.get("payment_period_name", [])
-                if isinstance(period_names, str):
-                    period_names = [period_names]
-                row_data.setlist("payment_period_name", period_names)
-                row_form = PublicPaymentRequestForm(row_data)
-                if not row_form.is_valid():
-                    error_messages = [
-                        message
-                        for errors in row_form.errors.values()
-                        for message in errors
-                    ]
-                    batch_error = f"Khoản thu dòng {index}: {error_messages[0]}"
-                    break
-                cleaned_requests.append(row_form.cleaned_data)
-
-            if batch_error:
-                form = PublicPaymentRequestForm(request.POST)
-                form.is_valid()
-                form.add_error(None, batch_error)
-                return render(request, "accounts/payment_request.html", {"form": form})
-
-            with transaction.atomic():
-                request_group = uuid.uuid4()
-                for data in cleaned_requests:
-                    for period_name in data["payment_period_name"]:
-                        PaymentRequest.objects.create(
-                            request_group=request_group,
-                            enrollment=data["enrollment"],
-                            student_name=data["student_name"],
-                            classroom_name=data["classroom_name"],
-                            subject_name=data["subject_name"],
-                            teacher_name=data["teacher_name"],
-                            payment_period_name=period_name,
-                            amount=data["amount"],
-                            payment_method=data["payment_method"],
-                        )
-            return render(request, "accounts/payment_request_success.html")
-
-        form = PublicPaymentRequestForm(request.POST)
-        if form.is_valid():
-            data = form.cleaned_data
-            with transaction.atomic():
-                request_group = uuid.uuid4()
-                for period_name in data["payment_period_name"]:
-                    PaymentRequest.objects.create(
-                        request_group=request_group,
-                        enrollment=data["enrollment"],
-                        student_name=data["student_name"],
-                        classroom_name=data["classroom_name"],
-                        subject_name=data["subject_name"],
-                        teacher_name=data["teacher_name"],
-                        payment_period_name=period_name,
-                        amount=data["amount"],
-                        payment_method=data["payment_method"],
-                    )
-            return render(request, "accounts/payment_request_success.html")
-    else:
-        form = PublicPaymentRequestForm(initial={"payment_method": "cash"})
-    return render(request, "accounts/payment_request.html", {"form": form})
-
-
-def _normalized_search_text(value):
-    normalized = unicodedata.normalize("NFD", value.casefold())
-    return "".join(char for char in normalized if not unicodedata.combining(char)).replace("đ", "d")
-
-
-@require_POST
-def public_payment_student_search(request):
-    query = " ".join(request.POST.get("query", "").split())[:80]
-    if not query:
-        return JsonResponse({"students": []})
-
-    now = timezone.now().timestamp()
-    window_start, request_count = request.session.get("payment_search_window", (now, 0))
-    if now - window_start >= 60:
-        window_start, request_count = now, 0
-    if request_count >= 60:
-        return JsonResponse({"error": "Bạn tìm kiếm quá nhanh. Vui lòng thử lại sau một phút."}, status=429)
-    request.session["payment_search_window"] = (window_start, request_count + 1)
-
-    candidates = list(
-        Student.objects.filter(classroom__isnull=False, name__icontains=query)
-        .select_related("classroom")
-        .order_by("name", "pk")[:8]
-    )
-    if len(candidates) < 8:
-        seen_ids = {student.pk for student in candidates}
-        normalized_query = _normalized_search_text(query)
-        for student in Student.objects.filter(classroom__isnull=False).select_related("classroom").order_by("name", "pk").iterator():
-            if student.pk not in seen_ids and normalized_query in _normalized_search_text(student.name):
-                candidates.append(student)
-                seen_ids.add(student.pk)
-                if len(candidates) == 8:
-                    break
-
-    student_ids = [student.pk for student in candidates]
-    students_by_id = {
-        student.pk: student
-        for student in Student.objects.filter(pk__in=student_ids).select_related("classroom").prefetch_related(
-            Prefetch("enrollments", queryset=Enrollment.objects.select_related("teacher", "subject")),
-            Prefetch("payments", queryset=Payment.objects.select_related("payment_period")),
-        )
-    }
-    results = []
-    for student_id in student_ids:
-        student = students_by_id[student_id]
-        paid = {(payment.teacher_id, payment.payment_period.name) for payment in student.payments.all()}
-        enrollments = [
-            {
-                "id": enrollment.pk,
-                "teacher": enrollment.teacher.name,
-                "subject": enrollment.subject.name,
-                "unpaid_periods": [
-                    number for number in range(1, 9)
-                    if (enrollment.teacher_id, f"Đợt {number}") not in paid
-                ],
-            }
-            for enrollment in student.enrollments.all()
-        ]
-        if enrollments:
-            results.append({
-                "id": student.pk,
-                "name": student.name,
-                "classroom": student.classroom.name,
-                "enrollments": enrollments,
-            })
-    return JsonResponse({"students": results})
 
 
 @login_required
