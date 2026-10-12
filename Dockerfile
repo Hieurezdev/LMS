@@ -28,5 +28,5 @@ COPY . .
 # Expose port 8000
 EXPOSE 8000
 
-# Start server
-CMD ["uv", "run", "python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Start the production WSGI server when no Compose command is supplied.
+CMD ["uv", "run", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "2", "--timeout", "180", "--access-logfile", "-", "--error-logfile", "-"]

@@ -26,12 +26,12 @@ services:
     command: >
       sh -c "uv run python manage.py collectstatic --noinput &&
              uv run python manage.py migrate &&
-             uv run python manage.py runserver 0.0.0.0:8000"
+             exec uv run gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 2 --timeout 180 --access-logfile - --error-logfile -"
     volumes:
       - .:/app
       - /app/.venv
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     depends_on:

@@ -364,6 +364,7 @@ dependencies = [
     { name = "django-modeltranslation" },
     { name = "djangorestframework" },
     { name = "gopay" },
+    { name = "gunicorn" },
     { name = "openpyxl" },
     { name = "pillow" },
     { name = "psycopg2-binary" },
@@ -389,6 +390,7 @@ requires-dist = [
     { name = "django-modeltranslation", specifier = "==0.18.11" },
     { name = "djangorestframework", specifier = "==3.14.0" },
     { name = "gopay", specifier = "==2.0.1" },
+    { name = "gunicorn", specifier = "==26.2.0" },
     { name = "openpyxl", specifier = ">=3.1.2" },
     { name = "pillow", specifier = "==10.2.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
@@ -460,6 +462,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/09/b0/c1bc73956bedc34f9e775e955be62fd86e9f8c6b77c17378a4f76562abf1/gopay-2.0.1.tar.gz", hash = "sha256:3a9ead4396b6ba72957a288d31f370fe83ebdea12b6be4cef27f133e9552f666", size = 13706, upload-time = "2023-06-23T12:32:56.148Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/cc/d9b763ced5ec005581854865d575aa569f711e9683b87e0c96a3fa881881/gopay-2.0.1-py3-none-any.whl", hash = "sha256:23c2bd56c32f778f81406bbbd71f1a4e0f8261778b3b909733ba795deb18cc6b", size = 12815, upload-time = "2023-06-23T12:32:54.251Z" },
+]
+
+[[package]]
+name = "gunicorn"
+version = "26.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d9/8a/e4ef6ee11701b6cd64702848415ffb69eeff85cb388a3c6c7fe86f22f3f8/gunicorn-26.2.0.tar.gz", hash = "sha256:62b864895d9ebff0b2f9867ba04fe811c93121596540830c9c916d0769668447", size = 787921, upload-time = "2026-08-24T15:05:59.3Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fe/85/7522a52e5e2f42faf1a129113ab63e548c42e103e9af395b7bfe65e403e2/gunicorn-26.2.0-py3-none-any.whl", hash = "sha256:bd249d0b3f7972f7432f0a6b6ff3b3ee2d129f70cd1ff6c09a9dd9e29a2b88e3", size = 228389, upload-time = "2026-08-24T15:05:57.67Z" },
 ]
 
 [[package]]
