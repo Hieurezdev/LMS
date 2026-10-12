@@ -1,0 +1,18 @@
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-top" aria-label="Phân trang">
+  <span class="text-secondary small">
+    Hiển thị {{ page_obj.start_index }}–{{ page_obj.end_index }} / {{ page_obj.paginator.count }}
+  </span>
+  <div class="d-flex align-items-center gap-2">
+    {% if page_obj.has_previous %}
+      <a class="btn btn-outline-secondary btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page=1">Đầu</a>
+      <a class="btn btn-outline-secondary btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Trước</a>
+    {% endif %}
+    <span class="small text-secondary">Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a class="btn btn-outline-secondary btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Sau</a>
+      <a class="btn btn-outline-secondary btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.paginator.num_pages }}">Cuối</a>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

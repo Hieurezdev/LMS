@@ -3,6 +3,7 @@ import datetime
 import io
 import json
 import re
+import unicodedata
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -13,6 +14,7 @@ from django.http import FileResponse, HttpResponseForbidden, Http404, JsonRespon
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.core.management import call_command, CommandError
+from django.core.paginator import Paginator
 from django.db.models import Prefetch, Sum, Count, Q
 from django.db import transaction, DatabaseError
 from django.contrib import messages
@@ -919,9 +921,7 @@ def teacher_import_excel(request, pk):
 # -------------------------------------------------------------
 def student_list(request):
     classrooms = ClassRoom.objects.all().order_by('name')
-    students = Student.objects.all().select_related('classroom').prefetch_related(
-        'enrollments__subject', 'enrollments__teacher', 'payments__payment_period'
-    )
+    students = Student.objects.all()
     
     search_name = request.GET.get('name', '').strip()
     classroom_id = request.GET.get('classroom_id', '').strip()
@@ -931,11 +931,46 @@ def student_list(request):
     if classroom_id:
         students = students.filter(classroom_id=classroom_id)
         
+    # Sort lightweight rows before fetching related records for the current page.
+    student_rows = list(students.order_by('pk').values_list('pk', 'name'))
+    name_keys = {student_id: given_name_sort_key(name) for student_id, name in student_rows}
+    ids_by_name = defaultdict(list)
+    for student_id, _ in student_rows:
+        ids_by_name[name_keys[student_id]].append(student_id)
+
+    # The existing order breaks identical-name ties by the number of paid periods.
+    tied_ids = [student_id for ids in ids_by_name.values() if len(ids) > 1 for student_id in ids]
+    paid_amounts = defaultdict(lambda: defaultdict(Decimal))
+    if tied_ids:
+        period_pattern = re.compile(r'(?:Đợt|Period)\s+([1-8])', re.IGNORECASE)
+        for student_id, period_name, amount in Payment.objects.filter(
+            student_id__in=tied_ids
+        ).values_list('student_id', 'payment_period__name', 'amount'):
+            match = period_pattern.fullmatch(period_name.strip())
+            if match:
+                paid_amounts[student_id][int(match.group(1))] += amount
+
+    student_rows.sort(key=lambda row: (
+        *name_keys[row[0]],
+        -sum(bool(amount) for amount in paid_amounts.get(row[0], {}).values()),
+    ))
+    page_obj = Paginator(student_rows, 50).get_page(request.GET.get('page'))
+    page_ids = [student_id for student_id, _ in page_obj.object_list]
+    page_students = Student.objects.filter(pk__in=page_ids).select_related(
+        'classroom'
+    ).prefetch_related(Prefetch(
+        'payments', queryset=Payment.objects.select_related('payment_period')
+    ))
+    students_by_id = {student.pk: student for student in page_students}
+    students = [students_by_id[student_id] for student_id in page_ids]
     attach_payment_period_amounts(students)
-    students = sort_students_by_given_name(students)
+    page_query = request.GET.copy()
+    page_query.pop('page', None)
     
     return render(request, 'lms_manager/student_list.html', {
         'students': students,
+        'page_obj': page_obj,
+        'page_query': page_query.urlencode(),
         'classrooms': classrooms,
         'search_name': search_name,
         'selected_classroom_id': classroom_id,
@@ -972,13 +1007,16 @@ def sort_students_for_lists(students):
     )
 
 
+def given_name_sort_key(name: str) -> tuple[str, str]:
+    return name.strip().rsplit(maxsplit=1)[-1].casefold(), name.casefold()
+
+
 def sort_students_by_given_name(students):
     """Sort student rows by the final word in the full name, then full name."""
     return sorted(
         students,
         key=lambda student: (
-            student.name.strip().rsplit(maxsplit=1)[-1].casefold(),
-            student.name.casefold(),
+            *given_name_sort_key(student.name),
             -sum(
                 bool(getattr(student, f'payment_amount_{period_num}', None))
                 for period_num in range(1, 9)
@@ -1411,9 +1449,16 @@ def payment_list(request):
             | Q(teacher__name__icontains=query)
             | Q(payment_period__name__icontains=query)
         )
-    payments = payments.order_by('-payment_date', '-id')
+    payments = payments.select_related(
+        'student', 'classroom', 'subject', 'teacher', 'payment_period'
+    ).order_by('-payment_date', '-id')
+    page_obj = Paginator(payments, 50).get_page(request.GET.get('page'))
+    page_query = request.GET.copy()
+    page_query.pop('page', None)
     return render(request, 'lms_manager/payment_list.html', {
-        'payments': payments,
+        'payments': page_obj.object_list,
+        'page_obj': page_obj,
+        'page_query': page_query.urlencode(),
         'payment_query': query,
     })
 
@@ -1543,6 +1588,66 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
         batch.payments.add(*payments)
         batch.generate_receipt_pdf()
     return batch
+
+@require_POST
+def payment_student_search(request):
+    query = ' '.join(request.POST.get('query', '').split())[:80]
+    if not query:
+        return JsonResponse({'students': []})
+
+    def normalized(value):
+        text = unicodedata.normalize('NFD', value.casefold())
+        return ''.join(char for char in text if not unicodedata.combining(char)).replace('đ', 'd')
+
+    normalized_query = normalized(query)
+    matches = []
+    for student_id, name, classroom in Student.objects.filter(
+        classroom__isnull=False
+    ).values_list('pk', 'name', 'classroom__name').iterator():
+        normalized_name = normalized(name)
+        if normalized_query not in normalized(f'{name} {classroom}'):
+            continue
+        if normalized_name == normalized_query:
+            rank = 0
+        elif normalized_name.startswith(normalized_query):
+            rank = 1
+        else:
+            rank = 2
+        matches.append((rank, normalized_name, student_id))
+    matches.sort()
+    candidate_ids = [student_id for _, _, student_id in matches[:32]]
+    students_by_id = {
+        student.pk: student
+        for student in Student.objects.filter(pk__in=candidate_ids).select_related('classroom').prefetch_related(
+            Prefetch('enrollments', queryset=Enrollment.objects.select_related('teacher')),
+            Prefetch('payments', queryset=Payment.objects.select_related('payment_period')),
+        )
+    }
+    results = []
+    for student_id in candidate_ids:
+        student = students_by_id[student_id]
+        paid_periods = {
+            int(match.group(1))
+            for payment in student.payments.all()
+            if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
+        }
+        unpaid_periods = [number for number in range(1, 9) if number not in paid_periods]
+        if not unpaid_periods:
+            continue
+        results.append({
+            'id': student.pk,
+            'name': student.name,
+            'classroom': student.classroom.name,
+            'unpaidPeriods': unpaid_periods,
+            'teachers': [
+                {'id': enrollment.teacher_id, 'name': enrollment.teacher.name}
+                for enrollment in student.enrollments.all()
+            ],
+        })
+        if len(results) == 8:
+            break
+    return JsonResponse({'students': results})
+
 
 def payment_create(request):
     if request.method == 'POST':
@@ -1718,22 +1823,7 @@ def payment_create(request):
                 initial_data['student_name'] = student.name
         form = PaymentForm(initial=initial_data)
 
-    existing_students = Student.objects.all().order_by('name').prefetch_related(
-        'enrollments__teacher', 'payments__payment_period'
-    )
-    for student in existing_students:
-        paid_periods = {
-            int(match.group(1))
-            for payment in student.payments.all()
-            if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
-        }
-        student.unpaid_period_numbers = [
-            period_num for period_num in range(1, 9) if period_num not in paid_periods
-        ]
-    return render(request, 'lms_manager/payment_create.html', {
-        'form': form,
-        'existing_students': existing_students
-    })
+    return render(request, 'lms_manager/payment_create.html', {'form': form})
 
 
 @require_POST

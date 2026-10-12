@@ -8,7 +8,7 @@ class LMSAccessMiddleware:
 
     CASHIER_ALLOWED_VIEWS = {
         "cashier_due_list",
-        "payment_add", "payment_receipt", "payment_batch_receipt",
+        "payment_add", "payment_student_search", "payment_receipt", "payment_batch_receipt",
         "api_student_subjects", "api_student_teachers", "api_student_unpaid_periods",
         "api_student_payment_periods", "api_get_receipt_url", "api_payment_periods_filter",
         "api_payment_period_details", "api_subject_teachers", "api_teacher_classrooms",

@@ -26,7 +26,7 @@
           </div>
         </div>
 
-        <form id="batch-payment-form" method="post" novalidate>
+        <form id="batch-payment-form" method="post" data-student-search-url="{% url 'payment_student_search' %}" novalidate>
           {% csrf_token %}
           <input type="hidden" name="batch_items" id="batch-items">
           <div id="batch-payment-list" class="batch-payment-list d-flex gap-3"></div>
@@ -68,11 +68,10 @@
 
 {% block js %}
 <script>
-  const students = [
-    {% for student in existing_students %}
-      {id: {{ student.id }}, name: "{{ student.name|escapejs }}", classroomId: {% if student.classroom_id %}{{ student.classroom_id }}{% else %}null{% endif %}, classroom: "{{ student.classroom.name|default:'Chưa xếp lớp'|escapejs }}", unpaidPeriods: {{ student.unpaid_period_numbers|safe }}, teachers: [{% for enrollment in student.enrollments.all %}{id: {{ enrollment.teacher.id }}, name: "{{ enrollment.teacher.name|escapejs }}"}{% if not forloop.last %}, {% endif %}{% endfor %}]},
-    {% endfor %}
-  ];
+  const paymentForm = document.querySelector('#batch-payment-form');
+  const studentSearchUrl = paymentForm.dataset.studentSearchUrl;
+  const csrfToken = paymentForm.querySelector('[name="csrfmiddlewaretoken"]').value;
+  const studentCache = new Map();
   const periodOptions = Array.from({length: 8}, (_, index) => `<label class="btn btn-outline-secondary btn-sm py-0"><input class="period-input visually-hidden" type="checkbox" value="${index + 1}"> Đợt ${index + 1}</label>`).join(' ');
   const paymentList = document.querySelector('#batch-payment-list');
   const money = new Intl.NumberFormat('en-US');
@@ -82,12 +81,12 @@
     const element = document.createElement('div'); element.textContent = value; return element.innerHTML;
   }
   function updateTeachers(row) {
-    const student = students.find(item => item.id === Number(row.querySelector('.student-id-input').value));
+    const student = studentCache.get(Number(row.querySelector('.student-id-input').value));
     const teacherInput = row.querySelector('.teacher-input');
     teacherInput.innerHTML = '<option value="">Chọn giảng viên</option>' + (student ? student.teachers.map(teacher => `<option value="${teacher.id}">${escapeHtml(teacher.name)}</option>`).join('') : '');
   }
   function updatePeriods(row) {
-    const student = students.find(item => item.id === Number(row.querySelector('.student-id-input').value));
+    const student = studentCache.get(Number(row.querySelector('.student-id-input').value));
     row.querySelectorAll('.period-input').forEach(input => {
       const available = student && student.unpaidPeriods.includes(Number(input.value));
       input.checked = false;
@@ -100,12 +99,12 @@
   }
   function clearStudent(row) {
     row.querySelector('.student-id-input').value = '';
-    row.querySelector('.student-name-input').value = '';
     row.querySelector('.teacher-input').innerHTML = '<option value="">Chọn giảng viên</option>';
     row.querySelector('.teacher-input').disabled = true;
     row.querySelectorAll('.period-input').forEach(input => {
       input.checked = false;
       input.disabled = true;
+      input.closest('label').classList.add('disabled');
       input.closest('label').classList.remove('active');
     });
     updateTotal();
@@ -121,6 +120,8 @@
     const nameInput = row.querySelector('.student-name-input');
     const studentIdInput = row.querySelector('.student-id-input');
     const suggestions = row.querySelector('.student-suggestions');
+    let searchTimer = null;
+    let searchController = null;
     suggestions.classList.remove('position-absolute', 'w-100');
     suggestions.classList.add('payment-student-suggestions');
     suggestions.style.position = 'fixed';
@@ -132,8 +133,10 @@
       suggestions.style.top = `${inputBounds.bottom}px`;
       suggestions.style.width = `${inputBounds.width}px`;
     };
-    const normalized = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
     const selectStudent = student => {
+      clearTimeout(searchTimer);
+      searchController?.abort();
+      studentCache.set(student.id, student);
       studentIdInput.value = student.id;
       nameInput.value = `${student.name} - ${student.classroom}`;
       lastSelectedStudentId = student.id;
@@ -142,29 +145,45 @@
       updatePeriods(row);
       row.querySelector('.teacher-input').disabled = false;
     };
-    const showSuggestions = clearSelection => {
-      const query = normalized(nameInput.value.trim());
-      if (clearSelection) studentIdInput.value = '';
-      const matches = students
-        .filter(student => student.unpaidPeriods.length && (!query || normalized(`${student.name} ${student.classroom}`).includes(query)))
-        .sort((a, b) => {
-          if (!query) return 0;
-          const rank = student => {
-            const name = normalized(student.name);
-            if (name === query) return 0;
-            if (name.startsWith(query)) return 1;
-            return 2;
-          };
-          return rank(a) - rank(b) || normalized(a.name).localeCompare(normalized(b.name));
-        })
-        .slice(0, 8);
-      suggestions.innerHTML = matches.length ? matches.map(student => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 student-suggestion" data-id="${student.id}"><strong>${escapeHtml(student.name)}</strong><br><small class="text-secondary">${escapeHtml(student.classroom)}</small></button>`).join('') : '<div class="px-3 py-2 text-secondary small">Không tìm thấy học sinh phù hợp</div>';
+    const showSuggestions = (matches, message = 'Không tìm thấy học sinh phù hợp') => {
+      suggestions.innerHTML = matches.length ? matches.map(student => `<button type="button" class="list-group-item list-group-item-action border-0 border-bottom py-2 student-suggestion" data-id="${student.id}"><strong>${escapeHtml(student.name)}</strong><br><small class="text-secondary">${escapeHtml(student.classroom)}</small></button>`).join('') : `<div class="px-3 py-2 text-secondary small">${escapeHtml(message)}</div>`;
       suggestions.classList.remove('d-none');
       positionSuggestions();
-      suggestions.querySelectorAll('.student-suggestion').forEach(button => button.addEventListener('mousedown', event => { event.preventDefault(); selectStudent(students.find(student => student.id === Number(button.dataset.id))); }));
+      suggestions.querySelectorAll('.student-suggestion').forEach(button => button.addEventListener('mousedown', event => {
+        event.preventDefault();
+        selectStudent(matches.find(student => student.id === Number(button.dataset.id)));
+      }));
     };
-    nameInput.addEventListener('input', () => { lastSelectedStudentId = null; showSuggestions(true); });
-    nameInput.addEventListener('focus', () => showSuggestions(false));
+    const searchStudents = async () => {
+      const query = nameInput.value.trim();
+      if (!query) { suggestions.classList.add('d-none'); return; }
+      searchController?.abort();
+      searchController = new AbortController();
+      try {
+        const response = await fetch(studentSearchUrl, {
+          method: 'POST',
+          headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({query}),
+          signal: searchController.signal,
+        });
+        if (response.redirected) throw new Error('Phiên đăng nhập đã hết. Vui lòng tải lại trang.');
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Không thể tìm kiếm học sinh.');
+        if (nameInput.value.trim() === query && !studentIdInput.value) showSuggestions(result.students);
+      } catch (error) {
+        if (error.name !== 'AbortError') showSuggestions([], error.message);
+      }
+    };
+    nameInput.addEventListener('input', () => {
+      lastSelectedStudentId = null;
+      clearStudent(row);
+      clearTimeout(searchTimer);
+      searchController?.abort();
+      searchTimer = setTimeout(searchStudents, 250);
+    });
+    nameInput.addEventListener('focus', () => {
+      if (!studentIdInput.value && nameInput.value.trim()) searchStudents();
+    });
     nameInput.addEventListener('keydown', event => {
       if (event.key === 'Enter') {
         const firstMatch = suggestions.querySelector('.student-suggestion');
@@ -181,18 +200,27 @@
       updateTotal();
     }));
     row.querySelectorAll('.period-input').forEach(input => input.addEventListener('change', () => { input.closest('label').classList.toggle('active', input.checked); updateTotal(); }));
-    row.querySelector('.remove-row').addEventListener('click', () => { suggestions.remove(); row.remove(); updateTotal(); });
+    row.querySelector('.remove-row').addEventListener('click', () => {
+      clearTimeout(searchTimer);
+      searchController?.abort();
+      paymentList.removeEventListener('scroll', positionSuggestions);
+      window.removeEventListener('scroll', positionSuggestions);
+      window.removeEventListener('resize', positionSuggestions);
+      suggestions.remove();
+      row.remove();
+      updateTotal();
+    });
     paymentList.appendChild(row);
     if (studentToPrefill) selectStudent(studentToPrefill);
+    requestAnimationFrame(() => { paymentList.scrollLeft = paymentList.scrollWidth; });
   }
   document.querySelector('#add-payment-row').addEventListener('click', () => {
-    const student = students.find(item => item.id === lastSelectedStudentId);
+    const student = studentCache.get(lastSelectedStudentId);
     addRow(student || null);
   });
   addRow();
 
   let paymentSubmitConfirmed = false;
-  const paymentForm = document.querySelector('#batch-payment-form');
   const paymentConfirmModal = bootstrap.Modal.getOrCreateInstance(document.querySelector('#payment-confirm-modal'));
 
   document.querySelector('#confirm-payment-submit').addEventListener('click', () => {

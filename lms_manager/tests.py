@@ -142,6 +142,24 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(response, 'Other Student')
         self.assertNotContains(response, self.student1.name)
 
+    def test_payment_list_paginates_and_keeps_search(self):
+        Payment.objects.bulk_create([
+            Payment(
+                student=self.student1, classroom=self.classroom, subject=self.subject,
+                teacher=self.teacher, payment_period=self.payment_period, amount=100000,
+            )
+            for _ in range(55)
+        ])
+
+        with translation.override('en'):
+            response = self.client.get(reverse('payment_list'), {'q': 'John Doe', 'page': '2'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['page_obj'].paginator.count, 56)
+        self.assertEqual(len(response.context['payments']), 6)
+        self.assertContains(response, 'q=John+Doe&amp;page=1')
+        self.assertContains(response, '56 giao dịch')
+
     def test_receipt_lookup_uses_teacher_and_rejects_ambiguous_payments(self):
         first_period = PaymentPeriod.objects.create(
             name='Đợt 1', teacher=self.teacher, subject=self.subject
@@ -464,6 +482,39 @@ class LMSManagerQueryTest(TestCase):
         self.assertContains(response, 'Thu học phí')
         self.assertContains(response, 'Nhập tên học sinh để tìm kiếm')
         self.assertNotContains(response, 'Nhập tên lớp để tìm kiếm')
+        self.assertNotIn(self.student1.name, response.content.decode())
+
+    def test_payment_student_search_is_limited_and_restricted_to_staff(self):
+        student = Student.objects.create(name='Nguyễn Ánh', classroom=self.classroom)
+        Enrollment.objects.create(student=student, subject=self.subject, teacher=self.teacher)
+        period = PaymentPeriod.objects.create(
+            name='Đợt 1', teacher=self.teacher, subject=self.subject
+        )
+        Payment.objects.bulk_create([Payment(
+            student=student, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=period, amount=100000,
+        )])
+
+        with translation.override('en'):
+            url = reverse('payment_student_search')
+            self.assertEqual(self.client.get(url).status_code, 405)
+            response = self.client.post(url, {'query': 'Nguyen Anh'})
+            cashier = get_user_model().objects.create_user(
+                username='search-cashier', password='safe-test-password'
+            )
+            self.client.force_login(cashier)
+            cashier_response = self.client.post(url, {'query': 'Nguyen Anh'})
+            self.client.logout()
+            anonymous_response = self.client.post(url, {'query': 'Nguyen Anh'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(cashier_response.status_code, 200)
+        self.assertEqual(anonymous_response.status_code, 302)
+        result = response.json()['students'][0]
+        self.assertEqual(result['id'], student.pk)
+        self.assertEqual(result['classroom'], self.classroom.name)
+        self.assertEqual(result['teachers'], [{'id': self.teacher.pk, 'name': self.teacher.name}])
+        self.assertNotIn(1, result['unpaidPeriods'])
 
     def test_classroom_list_can_search_by_name(self):
         other_classroom = ClassRoom.objects.create(name='11B2')
@@ -508,6 +559,38 @@ class LMSManagerQueryTest(TestCase):
             [name for name in exported_names if name in listed_names][:3],
             ['Trần Minh An', 'Lê Quốc Anh', 'Nguyễn Văn Bình'],
         )
+
+    def test_student_list_paginates_after_sorting_and_keeps_filters(self):
+        other_classroom = ClassRoom.objects.create(name='10A2')
+        Student.objects.create(name='Pupil 999', classroom=other_classroom)
+        Student.objects.bulk_create([
+            Student(name=f'Pupil {index:03d}', classroom=self.classroom)
+            for index in range(55)
+        ])
+        paid_duplicate = Student.objects.create(name='Pupil 010', classroom=self.classroom)
+        Payment.objects.bulk_create([Payment(
+            student=paid_duplicate, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=100000,
+        )])
+
+        filters = {'name': 'Pupil', 'classroom_id': str(self.classroom.pk)}
+        with translation.override('en'):
+            first = self.client.get(reverse('student_list'), {**filters, 'page': '1'})
+            second = self.client.get(reverse('student_list'), {**filters, 'page': '2'})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.context['page_obj'].paginator.count, 56)
+        self.assertEqual(len(first.context['students']), 50)
+        self.assertEqual(len(second.context['students']), 6)
+        self.assertEqual(
+            [student.pk for student in first.context['students'] if student.name == 'Pupil 010'][0],
+            paid_duplicate.pk,
+        )
+        self.assertContains(first, f'name=Pupil&amp;classroom_id={self.classroom.pk}&amp;page=2')
+        self.assertContains(first, '56 học sinh')
+        self.assertContains(first, '100,000 VNĐ', count=1)
+        self.assertEqual(second.context['page_obj'].start_index(), 51)
 
     def test_excel_import_uses_the_selected_classroom_and_teacher(self):
         upload = SimpleUploadedFile(

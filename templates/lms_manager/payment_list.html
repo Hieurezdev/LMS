@@ -34,7 +34,7 @@
         <i class="fas fa-wallet"></i>
         Danh sách giao dịch
       </div>
-      <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ payments|length }} giao dịch</span>
+      <span class="badge" style="background:#EEF1FE;color:#4F6EF7;font-size:12px;padding:5px 12px;">{{ page_obj.paginator.count }} giao dịch</span>
     </div>
     <form method="get" class="d-flex flex-wrap gap-2 align-items-center px-3 pt-3">
       <div class="input-group" style="max-width:520px;">
@@ -125,6 +125,7 @@
       </table>
     </div>
     </form>
+    {% include 'snippets/list_pagination.html' %}
   </div>
 </div>
 {% endblock content %}
