@@ -147,9 +147,13 @@
                                 <a href="{% url 'classroom_edit' item.classroom.id %}" class="btn btn-xs btn-outline-primary rounded-3 py-0.5 px-2" title="Sửa">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="{% url 'classroom_delete' item.classroom.id %}" class="btn btn-xs btn-outline-danger rounded-3 py-0.5 px-2" onclick="return confirm('Bạn có chắc chắn muốn xóa lớp học này không?');" title="Xóa">
-                                    <i class="fas fa-trash-alt"></i>
-                                </a>
+                                <form method="post" action="{% url 'classroom_delete' item.classroom.id %}" class="d-inline"
+                                      onsubmit="return confirm('Bạn có chắc chắn muốn xóa lớp học này không?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs btn-outline-danger rounded-3 py-0.5 px-2" title="Xóa">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
                             </div>
                         </td>
                     </tr>

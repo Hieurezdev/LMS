@@ -2,7 +2,7 @@ import json
 import io
 from pathlib import Path
 from unittest.mock import patch
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
@@ -206,6 +206,46 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertFalse(response.json()['success'])
         self.assertTrue(Payment.objects.filter(pk=self.payment.pk).exists())
+
+    def test_delete_endpoints_reject_get_without_creating_backup(self):
+        targets = (
+            ('classroom_delete', self.classroom, ClassRoom),
+            ('subject_delete', self.subject, Subject),
+            ('student_delete', self.student1, Student),
+            ('enrollment_delete', self.enrollment1, Enrollment),
+            ('payment_period_delete', self.payment_period, PaymentPeriod),
+        )
+        with patch('lms_manager.views.prepare_delete_backup') as backup:
+            for name, obj, model in targets:
+                with self.subTest(endpoint=name), translation.override('en'):
+                    response = self.client.get(reverse(name, args=[obj.pk]))
+                    self.assertEqual(response.status_code, 405)
+                    self.assertTrue(model.objects.filter(pk=obj.pk).exists())
+        backup.assert_not_called()
+
+    @patch('lms_manager.views.prepare_delete_backup', return_value=Path('backup.tar.gz'))
+    def test_student_delete_still_works_with_post(self, _backup):
+        with translation.override('en'):
+            response = self.client.post(reverse('student_delete', args=[self.student1.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Student.objects.filter(pk=self.student1.pk).exists())
+
+    @patch('lms_manager.views.prepare_delete_backup', return_value=Path('backup.tar.gz'))
+    def test_enrollment_delete_requires_csrf_and_accepts_valid_post(self, backup):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(self.admin_user)
+        with translation.override('en'):
+            url = reverse('enrollment_delete', args=[self.enrollment1.pk])
+            self.assertEqual(csrf_client.post(url).status_code, 403)
+            self.assertTrue(Enrollment.objects.filter(pk=self.enrollment1.pk).exists())
+            csrf_client.get(reverse('student_register', args=[self.student1.pk]))
+            token = csrf_client.cookies['csrftoken'].value
+            response = csrf_client.post(url, HTTP_X_CSRFTOKEN=token)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Enrollment.objects.filter(pk=self.enrollment1.pk).exists())
+        backup.assert_called_once()
 
     def test_teacher_list_searches_by_name_and_phone(self):
         other_teacher = Teacher.objects.create(name='Ms. Jones', phone='0988111222')

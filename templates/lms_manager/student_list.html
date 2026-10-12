@@ -194,10 +194,13 @@
                 <a href="{% url 'student_edit' s.id %}" class="btn btn-outline-secondary btn-xs" title="Sửa">
                   <i class="fas fa-edit"></i>
                 </a>
-                <a href="{% url 'student_delete' s.id %}" class="btn btn-outline-danger btn-xs"
-                   onclick="return confirm('Xóa học sinh này cùng toàn bộ dữ liệu liên quan?');" title="Xóa">
-                  <i class="fas fa-trash-alt"></i>
-                </a>
+                <form method="post" action="{% url 'student_delete' s.id %}" class="d-inline"
+                      onsubmit="return confirm('Xóa học sinh này cùng toàn bộ dữ liệu liên quan?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline-danger btn-xs" title="Xóa">
+                    <i class="fas fa-trash-alt"></i>
+                  </button>
+                </form>
               </div>
             </td>
           </tr>

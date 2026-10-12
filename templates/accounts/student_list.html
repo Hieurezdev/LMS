@@ -60,7 +60,13 @@
                         <ul class="dropdown-menu position-fixed">
                           <li><a class="dropdown-item" href="{% url 'student_edit' student.student.pk %}"><i class="fas fa-edit"></i>{% trans 'Update' %}</a></li>
                           <li><a class="dropdown-item" target="_blank" href="{% url 'profile_single' student.student.id %}?download_pdf=1"><i class="fas fa-download"></i>{% trans 'Download PDF' %}</a></li>
-                          <li><a class="dropdown-item text-danger" href="{% url 'student_delete' student.pk %}"><i class="fas fa-trash-alt"></i>{% trans 'Delete' %}</a></li>
+                          <li>
+                            <form method="post" action="{% url 'student_delete' student.pk %}"
+                                  onsubmit="return confirm('Xóa học sinh này cùng toàn bộ dữ liệu liên quan?');">
+                              {% csrf_token %}
+                              <button type="submit" class="dropdown-item text-danger"><i class="fas fa-trash-alt"></i>{% trans 'Delete' %}</button>
+                            </form>
+                          </li>
                         </ul>
                       </div>
                 </td>

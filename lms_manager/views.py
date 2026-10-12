@@ -461,6 +461,7 @@ def classroom_update(request, pk):
         form = ClassRoomForm(instance=classroom)
     return render(request, 'lms_manager/form.html', {'form': form, 'title': 'Sửa lớp học'})
 
+@require_POST
 def classroom_delete(request, pk):
     classroom = get_object_or_404(ClassRoom, pk=pk)
     backup_path = prepare_delete_backup(request, f'classroom-{classroom.pk}')
@@ -530,6 +531,7 @@ def subject_update(request, pk):
         form = SubjectForm(instance=subject)
     return render(request, 'lms_manager/form.html', {'form': form, 'title': 'Sửa môn học'})
 
+@require_POST
 def subject_delete(request, pk):
     subject = get_object_or_404(Subject, pk=pk)
     backup_path = prepare_delete_backup(request, f'subject-{subject.pk}')
@@ -1327,6 +1329,7 @@ def student_update(request, pk):
         form = StudentForm(instance=student)
     return render(request, 'lms_manager/form.html', {'form': form, 'title': 'Sửa học sinh'})
 
+@require_POST
 def student_delete(request, pk):
     student = get_object_or_404(Student, pk=pk)
     backup_path = prepare_delete_backup(request, f'student-{student.pk}')
@@ -1382,6 +1385,7 @@ def student_register(request, student_id):
         'form': form
     })
 
+@require_POST
 def enrollment_delete(request, pk):
     enrollment = get_object_or_404(Enrollment, pk=pk)
     backup_path = prepare_delete_backup(request, f'enrollment-{enrollment.pk}')
@@ -2550,6 +2554,7 @@ def payment_period_update(request, pk):
         form = PaymentPeriodForm(instance=period)
     return render(request, 'lms_manager/form.html', {'form': form, 'title': 'Sửa đợt đóng tiền'})
 
+@require_POST
 def payment_period_delete(request, pk):
     period = get_object_or_404(PaymentPeriod, pk=pk)
     backup_path = prepare_delete_backup(request, f'payment-period-{period.pk}')

@@ -69,11 +69,13 @@
             <div class="fw-semibold" style="font-size:13.5px;color:#0F172A;">{{ e.subject.name }}</div>
             <div style="font-size:12px;color:#94A3B8;">GV: {{ e.teacher.name }}</div>
           </div>
-          <a href="{% url 'enrollment_delete' e.id %}"
-             onclick="return confirm('Hủy đăng ký học môn này?');"
-             class="btn btn-outline-danger btn-xs" title="Hủy đăng ký">
-            <i class="fas fa-times"></i>
-          </a>
+          <form method="post" action="{% url 'enrollment_delete' e.id %}" class="d-inline"
+                onsubmit="return confirm('Hủy đăng ký học môn này?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-xs" title="Hủy đăng ký">
+              <i class="fas fa-times"></i>
+            </button>
+          </form>
         </div>
         {% empty %}
         <div class="text-center py-4" style="color:#94A3B8;font-size:13px;">

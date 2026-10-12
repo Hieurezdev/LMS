@@ -45,9 +45,13 @@
                             <a href="{% url 'subject_edit' s.id %}" class="btn btn-sm btn-outline-primary rounded-3 me-2">
                                 <i class="fas fa-edit"></i> Sửa
                             </a>
-                            <a href="{% url 'subject_delete' s.id %}" class="btn btn-sm btn-outline-danger rounded-3" onclick="return confirm('Bạn có chắc chắn muốn xóa môn học này không?');">
-                                <i class="fas fa-trash"></i> Xóa
-                            </a>
+                            <form method="post" action="{% url 'subject_delete' s.id %}" class="d-inline"
+                                  onsubmit="return confirm('Bạn có chắc chắn muốn xóa môn học này không?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-3">
+                                    <i class="fas fa-trash"></i> Xóa
+                                </button>
+                            </form>
                         </td>
                     </tr>
                 {% empty %}

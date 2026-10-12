@@ -60,9 +60,13 @@
                                 <td class="fw-semibold text-dark">{{ e.subject.name }}</td>
                                 <td class="text-secondary">{{ e.teacher.name }}</td>
                                 <td class="text-end">
-                                    <a href="{% url 'enrollment_delete' e.id %}" class="btn btn-sm btn-outline-danger rounded-3" onclick="return confirm('Bạn có chắc muốn hủy đăng ký môn này không?');">
-                                        <i class="fas fa-trash-alt me-1"></i>Hủy đăng ký
-                                    </a>
+                                    <form method="post" action="{% url 'enrollment_delete' e.id %}" class="d-inline"
+                                          onsubmit="return confirm('Bạn có chắc muốn hủy đăng ký môn này không?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-3">
+                                            <i class="fas fa-trash-alt me-1"></i>Hủy đăng ký
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                         {% empty %}
