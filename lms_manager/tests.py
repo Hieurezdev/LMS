@@ -1010,6 +1010,137 @@ class LMSManagerQueryTest(TestCase):
         self.assertNotContains(settled_preview, 'Xác nhận quyết toán &amp; tải Excel', html=True)
 
     @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_teacher_can_settle_all_classes_and_download_one_workbook(self, _payment_pdf):
+        other_classroom = ClassRoom.objects.create(name='10A2')
+        empty_classroom = ClassRoom.objects.create(name='10A3')
+        self.teacher.classes.add(other_classroom, empty_classroom)
+        other_student = Student.objects.create(name='=1+1', classroom=other_classroom)
+        Payment.objects.create(
+            student=other_student, classroom=other_classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=150000,
+        )
+        previous_settlement = TeacherSettlement.objects.create(
+            teacher=self.teacher, classroom=self.classroom, revenue=100000,
+            teacher_share_rate=Decimal('0.80'), teacher_amount=80000,
+        )
+        previous_settlement.payments.add(self.payment)
+        late_payment = Payment.objects.create(
+            student=self.student2, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=50000,
+        )
+
+        with translation.override('en'):
+            url = reverse('teacher_all_classes_settlement', args=[self.teacher.pk])
+            preview = self.client.get(url, {'period': [1]})
+            preview_export = self.client.get(
+                reverse('teacher_all_classes_settlement_students_export', args=[self.teacher.pk]),
+                {'period': [1]},
+            )
+            response = self.client.post(url, {'period': [1]})
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertContains(preview, 'Quyết toán tất cả lớp')
+        self.assertEqual(preview.context['payment_count'], 2)
+        self.assertEqual(preview.context['teacher_amount'], 160000)
+        self.assertEqual(preview_export.status_code, 200)
+        from openpyxl import load_workbook
+        preview_workbook = load_workbook(io.BytesIO(preview_export.content))
+        self.assertEqual(preview_workbook.sheetnames, [
+            self.classroom.name, other_classroom.name, empty_classroom.name,
+        ])
+        self.assertEqual(preview_workbook[self.classroom.name]['D8'].value, 40000)
+        self.assertEqual(preview_workbook[other_classroom.name]['D8'].value, 120000)
+        self.assertEqual(preview_workbook[other_classroom.name]['B8'].data_type, 's')
+        self.assertEqual(preview_workbook[empty_classroom.name]['D8'].value, 0)
+        self.assertEqual(response.status_code, 302)
+        new_settlements = list(TeacherSettlement.objects.exclude(pk=previous_settlement.pk))
+        self.assertEqual(len(new_settlements), 2)
+        self.assertEqual(
+            {settlement.classroom_id: settlement.teacher_amount for settlement in new_settlements},
+            {self.classroom.pk: 40000, other_classroom.pk: 120000},
+        )
+        self.assertEqual(
+            {payment.pk for settlement in new_settlements for payment in settlement.payments.all()},
+            {late_payment.pk, Payment.objects.get(student=other_student).pk},
+        )
+        self.assertEqual(list(previous_settlement.payments.values_list('pk', flat=True)), [self.payment.pk])
+        self.assertIn('download_all_settlements=', response['Location'])
+
+        with translation.override('en'):
+            detail = self.client.get(response['Location'])
+            export = self.client.get(detail.context['settlement_export_url'])
+            repeated = self.client.post(url, {'period': [1]})
+            invalid_export = self.client.get(
+                reverse('teacher_all_classes_settlement_export', args=[self.teacher.pk]),
+                {'settlement': [previous_settlement.pk, 999999]},
+            )
+        self.assertContains(detail, 'Quyết toán tất cả lớp')
+        self.assertEqual(export.status_code, 200)
+        workbook = load_workbook(io.BytesIO(export.content))
+        self.assertEqual(workbook.sheetnames, [self.classroom.name, other_classroom.name])
+        self.assertEqual(workbook[self.classroom.name]['D8'].value, 40000)
+        self.assertEqual(workbook[other_classroom.name]['D8'].value, 120000)
+        self.assertEqual(workbook[other_classroom.name]['B8'].data_type, 's')
+        self.assertEqual(repeated.status_code, 200)
+        self.assertEqual(TeacherSettlement.objects.count(), 3)
+        self.assertEqual(invalid_export.status_code, 404)
+
+    def test_teacher_all_classes_settlement_requires_period_and_admin_access(self):
+        with translation.override('en'):
+            url = reverse('teacher_all_classes_settlement', args=[self.teacher.pk])
+            response = self.client.post(url, {})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(TeacherSettlement.objects.count(), 0)
+            cashier = get_user_model().objects.create_user(
+                username='bulk-settlement-cashier', password='safe-test-password',
+            )
+            self.client.force_login(cashier)
+            self.assertEqual(self.client.get(url).status_code, 403)
+            self.assertEqual(self.client.post(url, {'period': [1]}).status_code, 403)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_all_classes_export_reconciles_rounding_and_long_sheet_names(self, _payment_pdf):
+        first_classroom = ClassRoom.objects.create(name='Lop co ten dai hon gioi han Excel 01')
+        second_classroom = ClassRoom.objects.create(name='Lop co ten dai hon gioi han Excel 02')
+        self.teacher.classes.add(first_classroom, second_classroom)
+        for number in range(3):
+            student = Student.objects.create(name=f'Student {number}', classroom=first_classroom)
+            Payment.objects.create(
+                student=student, classroom=first_classroom, subject=self.subject,
+                teacher=self.teacher, payment_period=self.payment_period, amount=1,
+            )
+        second_student = Student.objects.create(name='Other student', classroom=second_classroom)
+        Payment.objects.create(
+            student=second_student, classroom=second_classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=1,
+        )
+
+        with translation.override('en'):
+            preview = self.client.get(
+                reverse('teacher_all_classes_settlement_students_export', args=[self.teacher.pk]),
+                {'period': [1]},
+            )
+            response = self.client.post(
+                reverse('teacher_all_classes_settlement', args=[self.teacher.pk]),
+                {'period': [1]},
+            )
+            detail = self.client.get(response['Location'])
+            export = self.client.get(detail.context['settlement_export_url'])
+
+        from openpyxl import load_workbook
+        preview_workbook = load_workbook(io.BytesIO(preview.content), data_only=True)
+        workbook = load_workbook(io.BytesIO(export.content), data_only=True)
+        self.assertEqual(len(set(workbook.sheetnames)), 3)
+        self.assertTrue(all(len(name) <= 31 for name in workbook.sheetnames))
+        self.assertEqual(workbook.sheetnames, preview_workbook.sheetnames)
+        first_sheet = workbook[workbook.sheetnames[1]]
+        preview_first_sheet = preview_workbook[preview_workbook.sheetnames[1]]
+        self.assertEqual([first_sheet.cell(row, 4).value for row in (8, 9, 10)], [1, 1, 0])
+        self.assertEqual(first_sheet['D11'].value, 2)
+        self.assertEqual(preview_first_sheet['D11'].value, 2)
+        self.assertEqual(sum(preview_first_sheet.cell(row, 4).value for row in (8, 9, 10)), 2)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
     def test_late_payment_in_a_settled_period_can_be_settled_without_old_payments(self, _payment_pdf):
         with translation.override('en'):
             self.client.post(

@@ -2174,6 +2174,18 @@ def teacher_detail(request, pk):
         ).first()
         if settlement:
             settlement_export_url = reverse('teacher_settlement_export', args=[settlement.pk])
+    bulk_settlement_ids = request.GET.getlist('download_all_settlements')
+    if bulk_settlement_ids and len(set(bulk_settlement_ids)) == len(bulk_settlement_ids) and all(
+        value.isdecimal() for value in bulk_settlement_ids
+    ):
+        settlements = TeacherSettlement.objects.filter(
+            pk__in=bulk_settlement_ids, teacher=teacher,
+        )
+        if settlements.count() == len(set(bulk_settlement_ids)):
+            query = '&'.join(f'settlement={value}' for value in bulk_settlement_ids)
+            settlement_export_url = (
+                reverse('teacher_all_classes_settlement_export', args=[teacher.pk]) + f'?{query}'
+            )
     subjects = teacher.subjects.all()
     
     # Get classrooms associated with this teacher
@@ -2321,6 +2333,18 @@ def _settlement_student_rows(payments, period_numbers=None):
     return ordered_rows
 
 
+def _settlement_teacher_amounts(rows, rate):
+    amounts = []
+    running_revenue = Decimal('0')
+    allocated_amount = Decimal('0')
+    for row in rows:
+        running_revenue += row['amount']
+        rounded_total = (running_revenue * rate).quantize(Decimal('1'))
+        amounts.append(int(rounded_total - allocated_amount))
+        allocated_amount = rounded_total
+    return amounts
+
+
 def teacher_class_settlement(request, teacher_id, classroom_id):
     teacher = get_object_or_404(Teacher, pk=teacher_id)
     classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
@@ -2342,6 +2366,7 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
             messages.error(request, 'Hãy chọn ít nhất một đợt cần quyết toán.')
         else:
             with transaction.atomic():
+                Teacher.objects.select_for_update().get(pk=teacher.pk)
                 payment_ids = list(_unsettled_teacher_payments(
                     teacher, classroom, selected_period_numbers
                 ).values_list('id', flat=True))
@@ -2394,6 +2419,168 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
         'teacher_amount': teacher_amount,
         'teacher_share_rate': TEACHER_SETTLEMENT_RATE * 100,
     })
+
+
+def teacher_all_classes_settlement(request, teacher_id):
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    classrooms = list(teacher.classes.order_by('name', 'id'))
+    selected_period_numbers = sorted({
+        int(value) for value in (request.POST if request.method == 'POST' else request.GET).getlist('period')
+        if value.isdecimal() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+    })
+    period_options = [
+        {'number': number, 'name': f'Đợt {number}'} for number in SETTLEMENT_PERIOD_NUMBERS
+    ]
+    period_ids = [
+        period.pk for period in PaymentPeriod.objects.filter(teacher=teacher)
+        if _payment_period_number(period) in selected_period_numbers
+    ]
+    classroom_ids = [classroom.pk for classroom in classrooms]
+
+    if request.method == 'POST':
+        if not selected_period_numbers:
+            messages.error(request, 'Hãy chọn ít nhất một đợt cần quyết toán.')
+        else:
+            with transaction.atomic():
+                Teacher.objects.select_for_update().get(pk=teacher.pk)
+                payment_ids = list(Payment.objects.filter(
+                    teacher=teacher, classroom_id__in=classroom_ids,
+                    payment_period_id__in=period_ids, teacher_settlements__isnull=True,
+                ).values_list('pk', flat=True))
+                payments = list(Payment.objects.select_for_update(of=('self',)).filter(
+                    pk__in=payment_ids, teacher=teacher, classroom_id__in=classroom_ids,
+                    payment_period_id__in=period_ids, teacher_settlements__isnull=True,
+                ).select_related('student', 'payment_period').order_by('classroom_id', 'student__name', 'id'))
+                if not payments:
+                    messages.error(request, 'Các đợt đã chọn không còn khoản thu nào cần quyết toán.')
+                else:
+                    payments_by_classroom = defaultdict(list)
+                    for payment in payments:
+                        payments_by_classroom[payment.classroom_id].append(payment)
+                    settlement_ids = []
+                    for classroom in classrooms:
+                        class_payments = payments_by_classroom[classroom.pk]
+                        if not class_payments:
+                            continue
+                        revenue = sum((payment.amount for payment in class_payments), Decimal('0'))
+                        settlement = TeacherSettlement.objects.create(
+                            teacher=teacher, classroom=classroom, revenue=revenue,
+                            teacher_share_rate=TEACHER_SETTLEMENT_RATE,
+                            teacher_amount=(revenue * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1')),
+                        )
+                        settlement.payments.add(*class_payments)
+                        settlement_ids.append(settlement.pk)
+                    messages.success(
+                        request, f'Đã quyết toán {len(settlement_ids)} lớp. File Excel đang được tải xuống.',
+                    )
+                    detail_url = reverse('teacher_detail', args=[teacher.pk])
+                    query = '&'.join(f'download_all_settlements={pk}' for pk in settlement_ids)
+                    return redirect(f'{detail_url}?{query}')
+
+    payments_by_classroom = defaultdict(list)
+    if selected_period_numbers:
+        payments = Payment.objects.filter(
+            teacher=teacher, classroom_id__in=classroom_ids, payment_period_id__in=period_ids,
+        ).select_related('student', 'payment_period').prefetch_related('teacher_settlements')
+        for payment in payments:
+            payments_by_classroom[payment.classroom_id].append(payment)
+    classroom_summaries = []
+    total_revenue = Decimal('0')
+    payment_count = 0
+    for classroom in classrooms:
+        class_payments = payments_by_classroom[classroom.pk]
+        pending_payments = [
+            payment for payment in class_payments if not payment.teacher_settlements.exists()
+        ]
+        revenue = sum((payment.amount for payment in pending_payments), Decimal('0'))
+        classroom_summaries.append({
+            'classroom': classroom,
+            'payment_count': len(pending_payments),
+            'teacher_amount': (revenue * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1')),
+            'student_rows': _settlement_student_rows(class_payments, selected_period_numbers),
+        })
+        total_revenue += revenue
+        payment_count += len(pending_payments)
+    return render(request, 'lms_manager/teacher_all_classes_settlement.html', {
+        'teacher': teacher,
+        'classroom_summaries': classroom_summaries,
+        'period_options': period_options,
+        'selected_period_numbers': selected_period_numbers,
+        'payment_count': payment_count,
+        'revenue': total_revenue,
+        'teacher_amount': sum(
+            (summary['teacher_amount'] for summary in classroom_summaries), Decimal('0')
+        ),
+        'teacher_share_rate': TEACHER_SETTLEMENT_RATE * 100,
+    })
+
+
+@require_GET
+def teacher_all_classes_settlement_students_export(request, teacher_id):
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill
+
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    period_numbers = sorted({
+        int(value) for value in request.GET.getlist('period')
+        if value.isdecimal() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+    })
+    if not period_numbers:
+        return HttpResponse('Hãy chọn ít nhất một đợt để xuất Excel.', status=400)
+    classrooms = list(teacher.classes.order_by('name', 'id'))
+    if not classrooms:
+        raise Http404('Giảng viên chưa được phân công lớp học.')
+    period_ids = [
+        period.pk for period in PaymentPeriod.objects.filter(teacher=teacher)
+        if _payment_period_number(period) in period_numbers
+    ]
+    payments_by_classroom = defaultdict(list)
+    payments = Payment.objects.filter(
+        teacher=teacher, classroom__in=classrooms,
+        payment_period_id__in=period_ids, teacher_settlements__isnull=True,
+    ).select_related('student', 'payment_period').order_by('student__name', 'id')
+    for payment in payments:
+        payments_by_classroom[payment.classroom_id].append(payment)
+
+    workbook = Workbook()
+    used_names = set()
+    no_fill = PatternFill(fill_type=None)
+    for class_index, classroom in enumerate(classrooms):
+        sheet = workbook.active if class_index == 0 else workbook.create_sheet()
+        sheet.title = unique_excel_sheet_name(classroom.name, used_names)
+        student_rows = sorted(
+            _settlement_student_rows(payments_by_classroom[classroom.pk]),
+            key=lambda row: given_name_sort_key(row['student_name']),
+        )
+        teacher_amounts = _settlement_teacher_amounts(student_rows, TEACHER_SETTLEMENT_RATE)
+        rows = [
+            [index, row['student_name'], ', '.join(row['period_names']), teacher_amount]
+            for index, (row, teacher_amount) in enumerate(zip(student_rows, teacher_amounts), start=1)
+        ]
+        format_excel_sheet(
+            sheet, f'CHỜ QUYẾT TOÁN ĐỢT {", ".join(map(str, period_numbers))} - {classroom.name}',
+            ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền giảng viên nhận (VNĐ)'],
+            rows,
+            details=[
+                ('Lớp', classroom.name), ('Giảng viên', teacher.name),
+                ('Ngày xuất danh sách', timezone.localtime().strftime('%d/%m/%Y %H:%M')),
+                ('Số khoản chờ', len(payments_by_classroom[classroom.pk])),
+            ],
+            fit_to_height=0,
+        )
+        total_row = 8 + len(rows)
+        sheet.cell(row=total_row, column=3, value='Tổng số tiền giảng viên nhận')
+        sheet.cell(row=total_row, column=4, value=sum(row[3] for row in rows))
+        sheet.cell(row=total_row, column=4).number_format = '#,##0'
+        sheet.print_area = f'A1:D{total_row}'
+        for sheet_row in sheet:
+            for cell in sheet_row:
+                if cell.fill.patternType is not None:
+                    cell.fill = no_fill
+                if cell.data_type == 'f':
+                    cell.data_type = 's'
+
+    return excel_download_response(workbook, f'danh_sach_cho_quyet_toan_gv_{teacher.pk}.xlsx')
 
 
 @require_GET
@@ -2530,12 +2717,7 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
     return excel_download_response(workbook, filename)
 
 
-def teacher_settlement_export(request, pk):
-    settlement = get_object_or_404(
-        TeacherSettlement.objects.select_related('teacher', 'classroom'), pk=pk
-    )
-    # openpyxl is already a project dependency and is used for the existing Excel import flow.
-    from openpyxl import Workbook
+def _fill_teacher_settlement_sheet(sheet, settlement):
     from openpyxl.styles import Alignment, Border, Side
     from openpyxl.worksheet.page import PageMargins
 
@@ -2550,9 +2732,6 @@ def teacher_settlement_export(request, pk):
     period_label = ', '.join(str(number) for number in period_numbers) or 'khác'
     paid_student_count = len({payment.student_id for payment in payments})
     unpaid_student_count = max(settlement.classroom.students.count() - paid_student_count, 0)
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = 'Quyet toan'
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = 'A7'
     sheet.merge_cells('A1:E1')
@@ -2577,9 +2756,9 @@ def teacher_settlement_export(request, pk):
         cell.border = grid_border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     sheet.row_dimensions[header_row].height = 26
-    for index, row in enumerate(rows, start=1):
-        teacher_amount = (row['amount'] * settlement.teacher_share_rate).quantize(Decimal('1'))
-        sheet.append([index, row['student_name'], ', '.join(row['period_names']), int(teacher_amount)])
+    teacher_amounts = _settlement_teacher_amounts(rows, settlement.teacher_share_rate)
+    for index, (row, teacher_amount) in enumerate(zip(rows, teacher_amounts), start=1):
+        sheet.append([index, row['student_name'], ', '.join(row['period_names']), teacher_amount])
         row_number = header_row + index
         sheet.row_dimensions[row_number].height = 21
         for column in range(1, 5):
@@ -2613,7 +2792,21 @@ def teacher_settlement_export(request, pk):
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_margins = PageMargins(left=0.25, right=0.25, top=0.4, bottom=0.4, header=0.15, footer=0.15)
     sheet.print_options.horizontalCentered = True
+    for sheet_row in sheet:
+        for cell in sheet_row:
+            if cell.data_type == 'f':
+                cell.data_type = 's'
 
+
+def teacher_settlement_export(request, pk):
+    from openpyxl import Workbook
+
+    settlement = get_object_or_404(
+        TeacherSettlement.objects.select_related('teacher', 'classroom'), pk=pk
+    )
+    workbook = Workbook()
+    workbook.active.title = 'Quyet toan'
+    _fill_teacher_settlement_sheet(workbook.active, settlement)
     buffer = io.BytesIO()
     workbook.save(buffer)
     response = HttpResponse(
@@ -2623,6 +2816,31 @@ def teacher_settlement_export(request, pk):
     filename = f'quyet_toan_{settlement.teacher.name}_{settlement.classroom.name}_{settlement.pk}.xlsx'
     response['Content-Disposition'] = f"attachment; filename*=UTF-8''{filename}"
     return response
+
+
+@require_GET
+def teacher_all_classes_settlement_export(request, teacher_id):
+    from openpyxl import Workbook
+
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    settlement_ids = request.GET.getlist('settlement')
+    if not settlement_ids or any(not value.isdecimal() for value in settlement_ids):
+        return HttpResponse('Hãy chọn các quyết toán cần xuất Excel.', status=400)
+    if len(set(settlement_ids)) != len(settlement_ids):
+        return HttpResponse('Danh sách quyết toán bị trùng.', status=400)
+    settlements = list(TeacherSettlement.objects.filter(
+        pk__in=settlement_ids, teacher=teacher,
+    ).select_related('teacher', 'classroom').order_by('classroom__name', 'pk'))
+    if len(settlements) != len(settlement_ids):
+        raise Http404('Không tìm thấy quyết toán của giảng viên.')
+
+    workbook = Workbook()
+    used_names = set()
+    for index, settlement in enumerate(settlements):
+        sheet = workbook.active if index == 0 else workbook.create_sheet()
+        sheet.title = unique_excel_sheet_name(settlement.classroom.name, used_names)
+        _fill_teacher_settlement_sheet(sheet, settlement)
+    return excel_download_response(workbook, f'quyet_toan_tat_ca_lop_gv_{teacher.pk}.xlsx')
 
 
 

@@ -161,6 +161,9 @@
                 <a href="{% url 'teacher_class_settlement' teacher.id report.classroom.id %}" class="btn btn-outline-primary btn-sm rounded-3">
                   <i class="fas fa-hand-holding-usd me-1"></i> Quyết toán
                 </a>
+                <a href="{% url 'teacher_all_classes_settlement' teacher.id %}" class="btn btn-outline-primary btn-sm rounded-3">
+                  <i class="fas fa-hand-holding-usd me-1"></i> Quyết toán tất cả lớp
+                </a>
                 <a href="{% url 'student_add' %}?classroom={{ report.classroom.id }}&teacher={{ teacher.id }}&next={{ request.path|urlencode }}" class="btn btn-primary btn-sm rounded-3">
                   <i class="fas fa-user-plus me-1"></i> Thêm lẻ học sinh
                 </a>
