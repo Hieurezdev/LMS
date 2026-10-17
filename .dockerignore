@@ -1,0 +1,11 @@
+.git/
+.venv/
+.env
+backups/
+media/receipts/
+staticfiles/
+artifacts/
+db.sqlite3
+**/__pycache__/
+*.pyc
+.DS_Store
