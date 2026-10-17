@@ -1036,6 +1036,12 @@ class LMSManagerQueryTest(TestCase):
                 reverse('teacher_all_classes_settlement_students_export', args=[self.teacher.pk]),
                 {'period': [1]},
             )
+            single_class_export = self.client.get(
+                reverse('teacher_class_settlement_students_export', args=[
+                    self.teacher.pk, self.classroom.pk,
+                ]),
+                {'period': [1]},
+            )
             response = self.client.post(url, {'period': [1]})
 
         self.assertEqual(preview.status_code, 200)
@@ -1049,15 +1055,37 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(preview.context['payment_count'], 2)
         self.assertEqual(preview.context['teacher_amount'], 160000)
         self.assertEqual(preview_export.status_code, 200)
+        self.assertIn('danh_sach_quyet_toan_tat_ca_lop_gv_', preview_export['Content-Disposition'])
         from openpyxl import load_workbook
         preview_workbook = load_workbook(io.BytesIO(preview_export.content))
         self.assertEqual(preview_workbook.sheetnames, [
-            self.classroom.name, other_classroom.name, empty_classroom.name,
+            'Tất cả - 10A1', 'Đã QT - 10A1', 'Chưa QT - 10A1',
+            'Tất cả - 10A2', 'Đã QT - 10A2', 'Chưa QT - 10A2',
+            'Tất cả - 10A3', 'Đã QT - 10A3', 'Chưa QT - 10A3',
         ])
-        self.assertEqual(preview_workbook[self.classroom.name]['D8'].value, 40000)
-        self.assertEqual(preview_workbook[other_classroom.name]['D8'].value, 120000)
-        self.assertEqual(preview_workbook[other_classroom.name]['B8'].data_type, 's')
-        self.assertEqual(preview_workbook[empty_classroom.name]['D8'].value, 0)
+        single_workbook = load_workbook(io.BytesIO(single_class_export.content))
+        for bulk_name, single_name in zip(preview_workbook.sheetnames[:3], single_workbook.sheetnames):
+            bulk_sheet = preview_workbook[bulk_name]
+            single_sheet = single_workbook[single_name]
+            self.assertEqual(bulk_sheet.freeze_panes, single_sheet.freeze_panes)
+            self.assertEqual(bulk_sheet.column_dimensions['D'].width, single_sheet.column_dimensions['D'].width)
+            self.assertEqual(
+                bulk_sheet.print_area.split('!', 1)[1],
+                single_sheet.print_area.split('!', 1)[1],
+            )
+            for row in range(1, single_sheet.max_row + 1):
+                for column in range(1, 5):
+                    if row == 3 and column == 3:
+                        continue
+                    self.assertEqual(
+                        bulk_sheet.cell(row, column).value,
+                        single_sheet.cell(row, column).value,
+                    )
+        self.assertEqual(preview_workbook['Đã QT - 10A1']['D8'].value, 80000)
+        self.assertEqual(preview_workbook['Chưa QT - 10A1']['D8'].value, 40000)
+        self.assertEqual(preview_workbook['Chưa QT - 10A2']['D8'].value, 120000)
+        self.assertEqual(preview_workbook['Chưa QT - 10A2']['B8'].data_type, 's')
+        self.assertEqual(preview_workbook['Tất cả - 10A3']['D8'].value, 0)
         self.assertEqual(response.status_code, 302)
         new_settlements = list(TeacherSettlement.objects.exclude(pk=previous_settlement.pk))
         self.assertEqual(len(new_settlements), 2)
@@ -1138,9 +1166,13 @@ class LMSManagerQueryTest(TestCase):
         workbook = load_workbook(io.BytesIO(export.content), data_only=True)
         self.assertEqual(len(set(workbook.sheetnames)), 3)
         self.assertTrue(all(len(name) <= 31 for name in workbook.sheetnames))
-        self.assertEqual(workbook.sheetnames, preview_workbook.sheetnames)
+        self.assertEqual(len(set(preview_workbook.sheetnames)), 9)
+        self.assertTrue(all(len(name) <= 31 for name in preview_workbook.sheetnames))
         first_sheet = workbook[workbook.sheetnames[1]]
-        preview_first_sheet = preview_workbook[preview_workbook.sheetnames[1]]
+        preview_first_sheet = next(
+            sheet for sheet in preview_workbook
+            if sheet.title.startswith('Chưa QT') and sheet['C2'].value == first_classroom.name
+        )
         self.assertEqual([first_sheet.cell(row, 4).value for row in (8, 9, 10)], [1, 1, 0])
         self.assertEqual(first_sheet['D11'].value, 2)
         self.assertEqual(preview_first_sheet['D11'].value, 2)

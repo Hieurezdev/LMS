@@ -2518,7 +2518,6 @@ def teacher_all_classes_settlement(request, teacher_id):
 @require_GET
 def teacher_all_classes_settlement_students_export(request, teacher_id):
     from openpyxl import Workbook
-    from openpyxl.styles import PatternFill
 
     teacher = get_object_or_404(Teacher, pk=teacher_id)
     period_numbers = sorted({
@@ -2530,57 +2529,22 @@ def teacher_all_classes_settlement_students_export(request, teacher_id):
     classrooms = list(teacher.classes.order_by('name', 'id'))
     if not classrooms:
         raise Http404('Giảng viên chưa được phân công lớp học.')
-    period_ids = [
-        period.pk for period in PaymentPeriod.objects.filter(teacher=teacher)
-        if _payment_period_number(period) in period_numbers
-    ]
-    payments_by_classroom = defaultdict(list)
-    payments = Payment.objects.filter(
-        teacher=teacher, classroom__in=classrooms,
-        payment_period_id__in=period_ids, teacher_settlements__isnull=True,
-    ).select_related('student', 'payment_period').order_by('student__name', 'id')
-    for payment in payments:
-        payments_by_classroom[payment.classroom_id].append(payment)
-
     workbook = Workbook()
+    workbook.remove(workbook.active)
     used_names = set()
-    no_fill = PatternFill(fill_type=None)
-    for class_index, classroom in enumerate(classrooms):
-        sheet = workbook.active if class_index == 0 else workbook.create_sheet()
-        sheet.title = unique_excel_sheet_name(classroom.name, used_names)
-        student_rows = sorted(
-            _settlement_student_rows(payments_by_classroom[classroom.pk]),
-            key=lambda row: given_name_sort_key(row['student_name']),
+    for classroom in classrooms:
+        sheet_names = (
+            unique_excel_sheet_name(f'Tất cả - {classroom.name}', used_names),
+            unique_excel_sheet_name(f'Đã QT - {classroom.name}', used_names),
+            unique_excel_sheet_name(f'Chưa QT - {classroom.name}', used_names),
         )
-        teacher_amounts = _settlement_teacher_amounts(student_rows, TEACHER_SETTLEMENT_RATE)
-        rows = [
-            [index, row['student_name'], ', '.join(row['period_names']), teacher_amount]
-            for index, (row, teacher_amount) in enumerate(zip(student_rows, teacher_amounts), start=1)
-        ]
-        format_excel_sheet(
-            sheet, f'CHỜ QUYẾT TOÁN ĐỢT {", ".join(map(str, period_numbers))} - {classroom.name}',
-            ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền giảng viên nhận (VNĐ)'],
-            rows,
-            details=[
-                ('Lớp', classroom.name), ('Giảng viên', teacher.name),
-                ('Ngày xuất danh sách', timezone.localtime().strftime('%d/%m/%Y %H:%M')),
-                ('Số khoản chờ', len(payments_by_classroom[classroom.pk])),
-            ],
-            fit_to_height=0,
+        _add_teacher_class_settlement_sheets(
+            workbook, teacher, classroom, period_numbers, sheet_names,
         )
-        total_row = 8 + len(rows)
-        sheet.cell(row=total_row, column=3, value='Tổng số tiền giảng viên nhận')
-        sheet.cell(row=total_row, column=4, value=sum(row[3] for row in rows))
-        sheet.cell(row=total_row, column=4).number_format = '#,##0'
-        sheet.print_area = f'A1:D{total_row}'
-        for sheet_row in sheet:
-            for cell in sheet_row:
-                if cell.fill.patternType is not None:
-                    cell.fill = no_fill
-                if cell.data_type == 'f':
-                    cell.data_type = 's'
 
-    return excel_download_response(workbook, f'danh_sach_cho_quyet_toan_gv_{teacher.pk}.xlsx')
+    periods_label = '-'.join(str(number) for number in period_numbers)
+    filename = f'danh_sach_quyet_toan_tat_ca_lop_gv_{teacher.pk}_dot_{periods_label}.xlsx'
+    return excel_download_response(workbook, filename)
 
 
 @require_GET
@@ -2595,6 +2559,19 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         return HttpResponse('Hãy chọn ít nhất một đợt để xuất Excel.', status=400)
 
     from openpyxl import Workbook
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    _add_teacher_class_settlement_sheets(
+        workbook, teacher, classroom, period_numbers,
+        ('Tất cả học sinh', 'Đã quyết toán', 'Chưa quyết toán'),
+    )
+    periods_label = '-'.join(str(number) for number in period_numbers)
+    filename = f'danh_sach_quyet_toan_gv_{teacher.pk}_lop_{classroom.pk}_dot_{periods_label}.xlsx'
+    return excel_download_response(workbook, filename)
+
+
+def _add_teacher_class_settlement_sheets(workbook, teacher, classroom, period_numbers, sheet_names):
     from openpyxl.styles import Alignment, Border, PatternFill, Side
 
     payments = _teacher_class_payments(
@@ -2635,7 +2612,11 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         frozenset({'settled', 'unsettled'}): 'Đã & chưa quyết toán',
     }
     all_student_rows = []
-    for index, student in enumerate(all_students, start=1):
+    all_student_amounts = _settlement_teacher_amounts(
+        [{'amount': amounts_by_student[student.pk]} for student in all_students],
+        TEACHER_SETTLEMENT_RATE,
+    )
+    for index, (student, teacher_amount) in enumerate(zip(all_students, all_student_amounts), start=1):
         period_statuses = [
             (number, status_labels[frozenset(statuses_by_student_period[(student.pk, number)])])
             for number in period_numbers
@@ -2646,7 +2627,7 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         ]
         all_student_rows.append([
             index, student.name, '\n'.join(period_descriptions),
-            int((amounts_by_student[student.pk] * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1'))),
+            teacher_amount,
         ])
 
     def add_sheet(title, sheet, rows):
@@ -2678,43 +2659,39 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         sheet.cell(row=total_row, column=4).number_format = '#,##0'
         sheet.print_area = f'A1:D{total_row}'
 
-    workbook = Workbook()
-    all_student_sheet = workbook.active
-    all_student_sheet.title = 'Tất cả học sinh'
+    all_student_sheet = workbook.create_sheet(sheet_names[0])
     add_sheet(
         f'QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}',
         all_student_sheet, all_student_rows,
     )
     for row_number in range(8, 8 + len(all_student_rows)):
         all_student_sheet.row_dimensions[row_number].height = max(21, 18 * len(period_numbers))
+    added_sheets = [all_student_sheet]
     for sheet_name, title, selected_payments in (
-        ('Đã quyết toán', f'ĐÃ QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', settled_payments),
-        ('Chưa quyết toán', f'CHƯA QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', unsettled_payments),
+        (sheet_names[1], f'ĐÃ QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', settled_payments),
+        (sheet_names[2], f'CHƯA QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', unsettled_payments),
     ):
         sheet = workbook.create_sheet(sheet_name)
+        added_sheets.append(sheet)
         student_rows = sorted(
             _settlement_student_rows(selected_payments),
             key=lambda row: given_name_sort_key(row['student_name']),
         )
+        teacher_amounts = _settlement_teacher_amounts(student_rows, TEACHER_SETTLEMENT_RATE)
         rows = [
-            [number, row['student_name'], ', '.join(row['period_names']),
-             int((row['amount'] * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1')))]
-            for number, row in enumerate(student_rows, start=1)
+            [number, row['student_name'], ', '.join(row['period_names']), teacher_amount]
+            for number, (row, teacher_amount) in enumerate(zip(student_rows, teacher_amounts), start=1)
         ]
         add_sheet(title, sheet, rows)
     # Keep the settlement report unfilled and treat formula-like input as text.
     no_fill = PatternFill(fill_type=None)
-    for sheet in workbook:
+    for sheet in added_sheets:
         for sheet_row in sheet:
             for cell in sheet_row:
                 if cell.fill.patternType is not None:
                     cell.fill = no_fill
                 if cell.data_type == 'f':
                     cell.data_type = 's'
-
-    periods_label = '-'.join(str(number) for number in period_numbers)
-    filename = f'danh_sach_quyet_toan_gv_{teacher.pk}_lop_{classroom.pk}_dot_{periods_label}.xlsx'
-    return excel_download_response(workbook, filename)
 
 
 def _fill_teacher_settlement_sheet(sheet, settlement):
