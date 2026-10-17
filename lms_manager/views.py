@@ -2408,7 +2408,7 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         return HttpResponse('Hãy chọn ít nhất một đợt để xuất Excel.', status=400)
 
     from openpyxl import Workbook
-    from openpyxl.styles import PatternFill
+    from openpyxl.styles import Alignment, Border, PatternFill, Side
 
     payments = _teacher_class_payments(
         teacher, classroom, period_numbers
@@ -2432,43 +2432,77 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         classroom.students.all(),
         key=lambda student: (*given_name_sort_key(student.name), student.pk),
     )
+    paid_student_count = len({payment.student_id for payment in payments})
+    unpaid_student_count = len(all_students) - paid_student_count
+    period_label = ', '.join(str(number) for number in period_numbers)
+    report_details = [
+        ('Lớp', classroom.name),
+        ('Ngày xuất danh sách', timezone.localtime().strftime('%d/%m/%Y %H:%M')),
+        ('Tổng số học sinh đã đóng', paid_student_count),
+        ('Tổng số học sinh chưa đóng', unpaid_student_count),
+    ]
     status_labels = {
         frozenset(): 'Chưa đóng',
         frozenset({'settled'}): 'Đã quyết toán',
         frozenset({'unsettled'}): 'Chưa quyết toán',
         frozenset({'settled', 'unsettled'}): 'Đã & chưa quyết toán',
     }
-    all_student_rows = [
-        [
-            index,
-            student.name,
-            *[
-                status_labels[frozenset(statuses_by_student_period[(student.pk, number)])]
-                for number in period_numbers
-            ],
-            amounts_by_student[student.pk],
+    all_student_rows = []
+    for index, student in enumerate(all_students, start=1):
+        period_statuses = [
+            (number, status_labels[frozenset(statuses_by_student_period[(student.pk, number)])])
+            for number in period_numbers
         ]
-        for index, student in enumerate(all_students, start=1)
-    ]
+        period_descriptions = [
+            f'Đợt {number} ({status})'
+            for number, status in period_statuses
+        ]
+        all_student_rows.append([
+            index, student.name, '\n'.join(period_descriptions),
+            int((amounts_by_student[student.pk] * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1'))),
+        ])
+
+    def add_sheet(title, sheet, rows):
+        format_excel_sheet(
+            sheet, title,
+            ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền giảng viên nhận (VNĐ)'],
+            rows, details=report_details, fit_to_height=0,
+        )
+        sheet.row_dimensions[7].height = 26
+        sheet.freeze_panes = 'A7'
+        for column, width in {'A': 8, 'B': 30, 'C': 32, 'D': 24}.items():
+            sheet.column_dimensions[column].width = width
+        border_side = Side(style='thin', color='B8C2CC')
+        border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+        for row_number, (label, value) in enumerate(report_details, start=2):
+            sheet.cell(row=row_number, column=2).value = None
+            sheet.merge_cells(start_row=row_number, start_column=1, end_row=row_number, end_column=2)
+            sheet.merge_cells(start_row=row_number, start_column=3, end_row=row_number, end_column=4)
+            for column, cell_value in ((1, label), (3, value)):
+                cell = sheet.cell(row=row_number, column=column, value=cell_value)
+                cell.border = border
+                cell.alignment = Alignment(vertical='center')
+            sheet.row_dimensions[row_number].height = 21
+        total_row = 8 + len(rows)
+        for column, value in ((3, 'Tổng số tiền giảng viên nhận'), (4, sum(row[3] for row in rows))):
+            cell = sheet.cell(row=total_row, column=column, value=value)
+            cell.border = border
+            cell.alignment = Alignment(horizontal='right', vertical='center')
+        sheet.cell(row=total_row, column=4).number_format = '#,##0'
+        sheet.print_area = f'A1:D{total_row}'
+
     workbook = Workbook()
     all_student_sheet = workbook.active
     all_student_sheet.title = 'Tất cả học sinh'
-    format_excel_sheet(
-        all_student_sheet,
-        'DANH SÁCH TẤT CẢ HỌC SINH',
-        ['STT', 'Học sinh', *[f'Đợt {number}' for number in period_numbers], 'Tổng đã thu (VNĐ)'],
-        all_student_rows,
-        details=[
-            ('Giảng viên', teacher.name),
-            ('Lớp', classroom.name),
-            ('Đợt đã chọn', ', '.join(str(number) for number in period_numbers)),
-            ('Số học sinh', len(all_students)),
-        ],
-        fit_to_height=0,
+    add_sheet(
+        f'QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}',
+        all_student_sheet, all_student_rows,
     )
+    for row_number in range(8, 8 + len(all_student_rows)):
+        all_student_sheet.row_dimensions[row_number].height = max(21, 18 * len(period_numbers))
     for sheet_name, title, selected_payments in (
-        ('Đã quyết toán', 'DANH SÁCH HỌC SINH ĐÃ QUYẾT TOÁN', settled_payments),
-        ('Chưa quyết toán', 'DANH SÁCH HỌC SINH CHƯA QUYẾT TOÁN', unsettled_payments),
+        ('Đã quyết toán', f'ĐÃ QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', settled_payments),
+        ('Chưa quyết toán', f'CHƯA QUYẾT TOÁN ĐỢT {period_label} - Thầy {teacher.name}', unsettled_payments),
     ):
         sheet = workbook.create_sheet(sheet_name)
         student_rows = sorted(
@@ -2476,22 +2510,11 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
             key=lambda row: given_name_sort_key(row['student_name']),
         )
         rows = [
-            [number, row['student_name'], ', '.join(row['period_names']), row['amount']]
+            [number, row['student_name'], ', '.join(row['period_names']),
+             int((row['amount'] * TEACHER_SETTLEMENT_RATE).quantize(Decimal('1')))]
             for number, row in enumerate(student_rows, start=1)
         ]
-        format_excel_sheet(
-            sheet,
-            title,
-            ['STT', 'Học sinh', 'Đợt thu', 'Số tiền đã thu (VNĐ)'],
-            rows,
-            details=[
-                ('Giảng viên', teacher.name),
-                ('Lớp', classroom.name),
-                ('Đợt đã chọn', ', '.join(str(number) for number in period_numbers)),
-                ('Số học sinh', len(student_rows)),
-            ],
-            fit_to_height=0,
-        )
+        add_sheet(title, sheet, rows)
     # Keep the settlement report unfilled and treat formula-like input as text.
     no_fill = PatternFill(fill_type=None)
     for sheet in workbook:
@@ -2548,14 +2571,15 @@ def teacher_settlement_export(request, pk):
         for column in range(1, 3):
             sheet.cell(row=row_number, column=column).border = grid_border
     header_row = 7
-    headers = ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền đã đóng (VNĐ)']
+    headers = ['STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền giảng viên nhận (VNĐ)']
     sheet.append(headers)
     for cell in sheet[header_row]:
         cell.border = grid_border
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     sheet.row_dimensions[header_row].height = 26
     for index, row in enumerate(rows, start=1):
-        sheet.append([index, row['student_name'], ', '.join(row['period_names']), int(row['amount'])])
+        teacher_amount = (row['amount'] * settlement.teacher_share_rate).quantize(Decimal('1'))
+        sheet.append([index, row['student_name'], ', '.join(row['period_names']), int(teacher_amount)])
         row_number = header_row + index
         sheet.row_dimensions[row_number].height = 21
         for column in range(1, 5):

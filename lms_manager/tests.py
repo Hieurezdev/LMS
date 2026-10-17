@@ -810,37 +810,67 @@ class LMSManagerQueryTest(TestCase):
                 for cell in row:
                     self.assertIsNone(cell.fill.patternType)
         all_students = workbook['Tất cả học sinh']
-        self.assertEqual(all_students['B5'].value, 3)
-        self.assertEqual(all_students['C7'].value, 'Đợt 1')
-        self.assertEqual(all_students['D7'].value, 'Tổng đã thu (VNĐ)')
+        self.assertEqual(all_students['A1'].value, 'QUYẾT TOÁN ĐỢT 1 - Thầy Mr. Smith')
+        self.assertEqual(all_students['A2'].value, 'Lớp')
+        self.assertEqual(all_students['C2'].value, self.classroom.name)
+        self.assertEqual(all_students['A3'].value, 'Ngày xuất danh sách')
+        self.assertEqual(all_students['A4'].value, 'Tổng số học sinh đã đóng')
+        self.assertEqual(all_students['C4'].value, 2)
+        self.assertEqual(all_students['A5'].value, 'Tổng số học sinh chưa đóng')
+        self.assertEqual(all_students['C5'].value, 1)
+        self.assertEqual(all_students['C7'].value, 'Đợt đã đóng')
+        self.assertEqual(all_students['D7'].value, 'Số tiền giảng viên nhận (VNĐ)')
         self.assertEqual(
             [(row[1].value, row[2].value, row[3].value) for row in all_students.iter_rows(
                 min_row=8, max_row=10, min_col=1, max_col=4
             )],
             [
-                (unpaid_student.name, 'Chưa đóng', 0),
-                (self.student2.name, 'Chưa quyết toán', 150000),
-                (self.student1.name, 'Đã quyết toán', 100000),
+                (unpaid_student.name, 'Đợt 1 (Chưa đóng)', 0),
+                (self.student2.name, 'Đợt 1 (Chưa quyết toán)', 120000),
+                (self.student1.name, 'Đợt 1 (Đã quyết toán)', 80000),
             ],
         )
+        for sheet in workbook:
+            self.assertIn('A1:D1', [str(merged) for merged in sheet.merged_cells.ranges])
+            self.assertIn('A2:B2', [str(merged) for merged in sheet.merged_cells.ranges])
+            self.assertEqual(sheet['A2'].value, 'Lớp')
+            self.assertEqual([sheet.cell(row=7, column=column).value for column in range(1, 5)], [
+                'STT', 'Học sinh', 'Đợt đã đóng', 'Số tiền giảng viên nhận (VNĐ)',
+            ])
+            self.assertEqual(sheet.freeze_panes, 'A7')
+            self.assertEqual(sheet.column_dimensions['B'].width, 30)
+            self.assertEqual(sheet.column_dimensions['C'].width, 32)
+            self.assertEqual(sheet.column_dimensions['D'].width, 24)
+        self.assertEqual(all_students['C11'].value, 'Tổng số tiền giảng viên nhận')
+        self.assertEqual(all_students['D11'].value, 200000)
         self.assertEqual(workbook['Đã quyết toán']['B8'].value, self.student1.name)
-        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 100000)
+        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 80000)
+        self.assertEqual(workbook['Đã quyết toán']['D9'].value, 80000)
         self.assertEqual(workbook['Chưa quyết toán']['B8'].value, self.student2.name)
-        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 150000)
+        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 120000)
         self.assertEqual(workbook['Chưa quyết toán']['B9'].value, None)
+        self.assertEqual(workbook['Chưa quyết toán']['C9'].value, 'Tổng số tiền giảng viên nhận')
+        self.assertEqual(workbook['Chưa quyết toán']['D9'].value, 120000)
+        self.assertNotIn('Tổng số tiền chưa quyết toán', [
+            cell.value for sheet in workbook for row in sheet.iter_rows() for cell in row
+        ])
 
         all_periods = load_workbook(io.BytesIO(all_periods_response.content), data_only=True)
-        self.assertEqual(all_periods['Tất cả học sinh']['D7'].value, 'Đợt 2')
-        self.assertEqual(all_periods['Tất cả học sinh']['D10'].value, 'Chưa quyết toán')
-        self.assertEqual(all_periods['Tất cả học sinh']['E10'].value, 350000)
+        self.assertIn('Đợt 2 (Chưa quyết toán)', all_periods['Tất cả học sinh']['C10'].value)
+        self.assertEqual(all_periods['Tất cả học sinh']['D10'].value, 280000)
+        self.assertGreater(all_periods['Tất cả học sinh'].row_dimensions[10].height, 21)
         self.assertEqual(all_periods['Chưa quyết toán']['B8'].value, self.student2.name)
         self.assertEqual(all_periods['Chưa quyết toán']['B9'].value, self.student1.name)
-        self.assertEqual(all_periods['Chưa quyết toán']['D9'].value, 250000)
+        self.assertEqual(all_periods['Chưa quyết toán']['D8'].value, 120000)
+        self.assertEqual(all_periods['Chưa quyết toán']['D9'].value, 200000)
+        self.assertEqual(all_periods['Chưa quyết toán']['D10'].value, 320000)
         empty_workbook = load_workbook(io.BytesIO(empty_period_response.content), data_only=True)
-        self.assertEqual(empty_workbook['Tất cả học sinh']['B5'].value, 3)
-        self.assertEqual(empty_workbook['Tất cả học sinh']['C8'].value, 'Chưa đóng')
-        self.assertEqual(empty_workbook['Đã quyết toán']['B5'].value, 0)
-        self.assertEqual(empty_workbook['Chưa quyết toán']['B5'].value, 0)
+        self.assertEqual(empty_workbook['Tất cả học sinh']['C4'].value, 0)
+        self.assertEqual(empty_workbook['Tất cả học sinh']['C5'].value, 3)
+        self.assertEqual(empty_workbook['Tất cả học sinh']['C8'].value, 'Đợt 8 (Chưa đóng)')
+        self.assertEqual(empty_workbook['Đã quyết toán']['C5'].value, 3)
+        self.assertEqual(empty_workbook['Chưa quyết toán']['C5'].value, 3)
+        self.assertEqual(empty_workbook['Chưa quyết toán']['D8'].value, 0)
         self.assertEqual(no_period_response.status_code, 400)
         self.assertEqual(invalid_period_response.status_code, 400)
         self.assertEqual(post_response.status_code, 405)
@@ -877,10 +907,11 @@ class LMSManagerQueryTest(TestCase):
 
         from openpyxl import load_workbook
         workbook = load_workbook(io.BytesIO(response.content), data_only=True)
-        self.assertEqual(workbook['Tất cả học sinh']['C9'].value, 'Đã & chưa quyết toán')
-        self.assertEqual(workbook['Tất cả học sinh']['D9'].value, 125000)
-        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 100000)
-        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 25000)
+        self.assertEqual(workbook['Tất cả học sinh']['C9'].value, 'Đợt 1 (Đã & chưa quyết toán)')
+        self.assertEqual(workbook['Tất cả học sinh']['D9'].value, 100000)
+        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 80000)
+        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 20000)
+        self.assertEqual(workbook['Chưa quyết toán']['D9'].value, 20000)
 
     @patch('lms_manager.models.Payment.generate_receipt_pdf')
     def test_settlement_student_export_keeps_formula_like_names_as_text(self, _payment_pdf):
@@ -954,6 +985,8 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(worksheet['A1'].value, 'QUYẾT TOÁN ĐỢT 1, 2 - Thầy Mr. Smith')
         self.assertEqual(worksheet['B4'].value, 2)
         self.assertEqual(worksheet['B5'].value, 0)
+        self.assertEqual(worksheet['D7'].value, 'Số tiền giảng viên nhận (VNĐ)')
+        self.assertEqual(sorted([worksheet['D8'].value, worksheet['D9'].value]), [80000, 120000])
         self.assertEqual(worksheet['D10'].value, 200000)
         self.assertNotIn('Tổng doanh thu', [cell.value for row in worksheet.iter_rows() for cell in row])
         self.assertEqual(int(worksheet.page_setup.paperSize), int(worksheet.PAPERSIZE_A4))
