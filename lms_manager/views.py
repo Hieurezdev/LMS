@@ -12,7 +12,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django import forms
 from django.http import FileResponse, HttpResponseForbidden, Http404, JsonResponse, HttpResponse
 from django.urls import reverse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.core.management import call_command, CommandError
 from django.core.paginator import Paginator
 from django.db.models import Prefetch, Sum, Count, Q
@@ -2326,7 +2326,7 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
     classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
     selected_period_numbers = [
         int(value) for value in request.GET.getlist('period')
-        if value.isdigit() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+        if value.isdecimal() and int(value) in SETTLEMENT_PERIOD_NUMBERS
     ]
     period_options = [
         {'number': period_number, 'name': f'Đợt {period_number}'}
@@ -2336,7 +2336,7 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
     if request.method == 'POST':
         selected_period_numbers = [
             int(value) for value in request.POST.getlist('period')
-            if value.isdigit() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+            if value.isdecimal() and int(value) in SETTLEMENT_PERIOD_NUMBERS
         ]
         if not selected_period_numbers:
             messages.error(request, 'Hãy chọn ít nhất một đợt cần quyết toán.')
@@ -2394,6 +2394,113 @@ def teacher_class_settlement(request, teacher_id, classroom_id):
         'teacher_amount': teacher_amount,
         'teacher_share_rate': TEACHER_SETTLEMENT_RATE * 100,
     })
+
+
+@require_GET
+def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
+    teacher = get_object_or_404(Teacher, pk=teacher_id)
+    classroom = get_object_or_404(ClassRoom, pk=classroom_id, teachers=teacher)
+    period_numbers = sorted({
+        int(value) for value in request.GET.getlist('period')
+        if value.isdecimal() and int(value) in SETTLEMENT_PERIOD_NUMBERS
+    })
+    if not period_numbers:
+        return HttpResponse('Hãy chọn ít nhất một đợt để xuất Excel.', status=400)
+
+    from openpyxl import Workbook
+
+    payments = _teacher_class_payments(
+        teacher, classroom, period_numbers
+    ).prefetch_related('teacher_settlements')
+    settled_payments = []
+    unsettled_payments = []
+    amounts_by_student = defaultdict(lambda: Decimal('0'))
+    statuses_by_student_period = defaultdict(set)
+    for payment in payments:
+        is_settled = payment.teacher_settlements.exists()
+        amounts_by_student[payment.student_id] += payment.amount
+        statuses_by_student_period[
+            (payment.student_id, _payment_period_number(payment.payment_period))
+        ].add('settled' if is_settled else 'unsettled')
+        if is_settled:
+            settled_payments.append(payment)
+        else:
+            unsettled_payments.append(payment)
+
+    all_students = sorted(
+        classroom.students.all(),
+        key=lambda student: (*given_name_sort_key(student.name), student.pk),
+    )
+    status_labels = {
+        frozenset(): 'Chưa đóng',
+        frozenset({'settled'}): 'Đã quyết toán',
+        frozenset({'unsettled'}): 'Chưa quyết toán',
+        frozenset({'settled', 'unsettled'}): 'Đã & chưa quyết toán',
+    }
+    all_student_rows = [
+        [
+            index,
+            student.name,
+            *[
+                status_labels[frozenset(statuses_by_student_period[(student.pk, number)])]
+                for number in period_numbers
+            ],
+            amounts_by_student[student.pk],
+        ]
+        for index, student in enumerate(all_students, start=1)
+    ]
+    workbook = Workbook()
+    all_student_sheet = workbook.active
+    all_student_sheet.title = 'Tất cả học sinh'
+    format_excel_sheet(
+        all_student_sheet,
+        'DANH SÁCH TẤT CẢ HỌC SINH',
+        ['STT', 'Học sinh', *[f'Đợt {number}' for number in period_numbers], 'Tổng đã thu (VNĐ)'],
+        all_student_rows,
+        details=[
+            ('Giảng viên', teacher.name),
+            ('Lớp', classroom.name),
+            ('Đợt đã chọn', ', '.join(str(number) for number in period_numbers)),
+            ('Số học sinh', len(all_students)),
+        ],
+        fit_to_height=0,
+    )
+    for sheet_name, title, selected_payments in (
+        ('Đã quyết toán', 'DANH SÁCH HỌC SINH ĐÃ QUYẾT TOÁN', settled_payments),
+        ('Chưa quyết toán', 'DANH SÁCH HỌC SINH CHƯA QUYẾT TOÁN', unsettled_payments),
+    ):
+        sheet = workbook.create_sheet(sheet_name)
+        student_rows = sorted(
+            _settlement_student_rows(selected_payments),
+            key=lambda row: given_name_sort_key(row['student_name']),
+        )
+        rows = [
+            [number, row['student_name'], ', '.join(row['period_names']), row['amount']]
+            for number, row in enumerate(student_rows, start=1)
+        ]
+        format_excel_sheet(
+            sheet,
+            title,
+            ['STT', 'Học sinh', 'Đợt thu', 'Số tiền đã thu (VNĐ)'],
+            rows,
+            details=[
+                ('Giảng viên', teacher.name),
+                ('Lớp', classroom.name),
+                ('Đợt đã chọn', ', '.join(str(number) for number in period_numbers)),
+                ('Số học sinh', len(student_rows)),
+            ],
+            fit_to_height=0,
+        )
+    # This report has no formulas; treat formula-like user input as plain text.
+    for sheet in workbook:
+        for sheet_row in sheet:
+            for cell in sheet_row:
+                if cell.data_type == 'f':
+                    cell.data_type = 's'
+
+    periods_label = '-'.join(str(number) for number in period_numbers)
+    filename = f'danh_sach_quyet_toan_gv_{teacher.pk}_lop_{classroom.pk}_dot_{periods_label}.xlsx'
+    return excel_download_response(workbook, filename)
 
 
 def teacher_settlement_export(request, pk):

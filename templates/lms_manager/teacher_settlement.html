@@ -66,6 +66,10 @@
         <h6 class="fw-bold mb-1">Danh sách học sinh đã đóng</h6>
         <div class="small text-secondary"> theo từng học sinh trong các đợt đã chọn.</div>
       </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'teacher_class_settlement_students_export' teacher.id classroom.id %}{% for period_number in selected_period_numbers %}{% if forloop.first %}?{% else %}&amp;{% endif %}period={{ period_number }}{% endfor %}" class="btn btn-outline-primary">
+          <i class="fas fa-file-excel me-1"></i> Xuất danh sách Excel
+        </a>
       {% if payment_count %}
       <form method="post" id="settlement-confirm-form" class="js-confirm-action">
         {% csrf_token %}
@@ -75,6 +79,7 @@
         </button>
       </form>
       {% endif %}
+      </div>
     </div>
     {% if student_rows %}
     <div class="table-responsive">

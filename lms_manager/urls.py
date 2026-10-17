@@ -41,6 +41,7 @@ urlpatterns = [
     path('teachers/<int:pk>/import-excel/', views.teacher_import_excel, name='teacher_import_excel'),
     path('teachers/import-template/', views.teacher_import_template, name='teacher_import_template'),
     path('teachers/<int:teacher_id>/classes/<int:classroom_id>/settlement/', views.teacher_class_settlement, name='teacher_class_settlement'),
+    path('teachers/<int:teacher_id>/classes/<int:classroom_id>/settlement/export/', views.teacher_class_settlement_students_export, name='teacher_class_settlement_students_export'),
     path('teacher-settlements/<int:pk>/export/', views.teacher_settlement_export, name='teacher_settlement_export'),
     
     # Student

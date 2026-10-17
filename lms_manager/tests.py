@@ -1,5 +1,6 @@
 import json
 import io
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
 from django.test import Client, TestCase, override_settings
@@ -755,6 +756,146 @@ class LMSManagerQueryTest(TestCase):
         self.assertIn(self.student1.name, exported_values)
         self.assertNotIn(self.student2.name, exported_values)
         self.assertIn('Đợt 1: đã đóng', exported_values)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_settlement_student_export_separates_selected_periods(self, _payment_pdf):
+        unpaid_student = Student.objects.create(name='Amy Doe', classroom=self.classroom)
+        second_period = PaymentPeriod.objects.create(
+            name='Period 2', teacher=self.teacher, subject=self.subject
+        )
+        Payment.objects.create(
+            student=self.student1, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=second_period, amount=250000,
+        )
+        Payment.objects.create(
+            student=self.student2, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=150000,
+        )
+        settlement = TeacherSettlement.objects.create(
+            teacher=self.teacher, classroom=self.classroom, revenue=100000,
+            teacher_share_rate=Decimal('0.80'), teacher_amount=80000,
+        )
+        settlement.payments.add(self.payment)
+        unrelated_classroom = ClassRoom.objects.create(name='Other class')
+        with translation.override('en'):
+            url = reverse('teacher_class_settlement_students_export', args=[
+                self.teacher.id, self.classroom.id,
+            ])
+            page_response = self.client.get(
+                reverse('teacher_class_settlement', args=[self.teacher.id, self.classroom.id]),
+                {'period': [1, 2]},
+            )
+            response = self.client.get(url, {'period': [1]})
+            all_periods_response = self.client.get(url, {'period': [1, 2]})
+            empty_period_response = self.client.get(url, {'period': [8]})
+            no_period_response = self.client.get(url)
+            invalid_period_response = self.client.get(url, {'period': '²'})
+            post_response = self.client.post(url, {'period': [1]})
+            unrelated_classroom_response = self.client.get(
+                reverse('teacher_class_settlement_students_export', args=[
+                    self.teacher.id, unrelated_classroom.id,
+                ]),
+                {'period': [1]},
+            )
+
+        from openpyxl import load_workbook
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        self.assertContains(page_response, f'{url}?period=1&amp;period=2')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(workbook.sheetnames, [
+            'Tất cả học sinh', 'Đã quyết toán', 'Chưa quyết toán',
+        ])
+        all_students = workbook['Tất cả học sinh']
+        self.assertEqual(all_students['B5'].value, 3)
+        self.assertEqual(all_students['C7'].value, 'Đợt 1')
+        self.assertEqual(all_students['D7'].value, 'Tổng đã thu (VNĐ)')
+        self.assertEqual(
+            [(row[1].value, row[2].value, row[3].value) for row in all_students.iter_rows(
+                min_row=8, max_row=10, min_col=1, max_col=4
+            )],
+            [
+                (unpaid_student.name, 'Chưa đóng', 0),
+                (self.student2.name, 'Chưa quyết toán', 150000),
+                (self.student1.name, 'Đã quyết toán', 100000),
+            ],
+        )
+        self.assertEqual(workbook['Đã quyết toán']['B8'].value, self.student1.name)
+        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 100000)
+        self.assertEqual(workbook['Chưa quyết toán']['B8'].value, self.student2.name)
+        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 150000)
+        self.assertEqual(workbook['Chưa quyết toán']['B9'].value, None)
+
+        all_periods = load_workbook(io.BytesIO(all_periods_response.content), data_only=True)
+        self.assertEqual(all_periods['Tất cả học sinh']['D7'].value, 'Đợt 2')
+        self.assertEqual(all_periods['Tất cả học sinh']['D10'].value, 'Chưa quyết toán')
+        self.assertEqual(all_periods['Tất cả học sinh']['E10'].value, 350000)
+        self.assertEqual(all_periods['Chưa quyết toán']['B8'].value, self.student2.name)
+        self.assertEqual(all_periods['Chưa quyết toán']['B9'].value, self.student1.name)
+        self.assertEqual(all_periods['Chưa quyết toán']['D9'].value, 250000)
+        empty_workbook = load_workbook(io.BytesIO(empty_period_response.content), data_only=True)
+        self.assertEqual(empty_workbook['Tất cả học sinh']['B5'].value, 3)
+        self.assertEqual(empty_workbook['Tất cả học sinh']['C8'].value, 'Chưa đóng')
+        self.assertEqual(empty_workbook['Đã quyết toán']['B5'].value, 0)
+        self.assertEqual(empty_workbook['Chưa quyết toán']['B5'].value, 0)
+        self.assertEqual(no_period_response.status_code, 400)
+        self.assertEqual(invalid_period_response.status_code, 400)
+        self.assertEqual(post_response.status_code, 405)
+        self.assertEqual(unrelated_classroom_response.status_code, 404)
+        self.assertEqual(TeacherSettlement.objects.count(), 1)
+        self.assertEqual(Payment.objects.count(), 3)
+
+        cashier = get_user_model().objects.create_user(
+            username='settlement-cashier', password='safe-test-password'
+        )
+        self.client.force_login(cashier)
+        with translation.override('en'):
+            self.assertEqual(self.client.get(url, {'period': [1]}).status_code, 403)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_settlement_student_export_marks_partially_settled_period(self, _payment_pdf):
+        settlement = TeacherSettlement.objects.create(
+            teacher=self.teacher, classroom=self.classroom, revenue=100000,
+            teacher_share_rate=Decimal('0.80'), teacher_amount=80000,
+        )
+        settlement.payments.add(self.payment)
+        Payment.objects.create(
+            student=self.student1, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher, payment_period=self.payment_period, amount=25000,
+        )
+
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('teacher_class_settlement_students_export', args=[
+                    self.teacher.id, self.classroom.id,
+                ]),
+                {'period': [1]},
+            )
+
+        from openpyxl import load_workbook
+        workbook = load_workbook(io.BytesIO(response.content), data_only=True)
+        self.assertEqual(workbook['Tất cả học sinh']['C9'].value, 'Đã & chưa quyết toán')
+        self.assertEqual(workbook['Tất cả học sinh']['D9'].value, 125000)
+        self.assertEqual(workbook['Đã quyết toán']['D8'].value, 100000)
+        self.assertEqual(workbook['Chưa quyết toán']['D8'].value, 25000)
+
+    @patch('lms_manager.models.Payment.generate_receipt_pdf')
+    def test_settlement_student_export_keeps_formula_like_names_as_text(self, _payment_pdf):
+        self.student1.name = '=1+1'
+        self.student1.save(update_fields=['name'])
+        with translation.override('en'):
+            response = self.client.get(
+                reverse('teacher_class_settlement_students_export', args=[
+                    self.teacher.id, self.classroom.id,
+                ]),
+                {'period': [1]},
+            )
+
+        from openpyxl import load_workbook
+        workbook = load_workbook(io.BytesIO(response.content))
+        for sheet_name in ('Tất cả học sinh', 'Chưa quyết toán'):
+            sheet = workbook[sheet_name]
+            self.assertEqual(sheet['B8'].value, '=1+1')
+            self.assertEqual(sheet['B8'].data_type, 's')
 
     @patch('lms_manager.models.Payment.generate_receipt_pdf')
     def test_teacher_can_settle_multiple_periods_once_and_download_excel(self, _payment_pdf):
