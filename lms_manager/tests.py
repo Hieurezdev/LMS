@@ -1040,6 +1040,12 @@ class LMSManagerQueryTest(TestCase):
 
         self.assertEqual(preview.status_code, 200)
         self.assertContains(preview, 'Quyết toán tất cả lớp')
+        first_table = preview.content.decode().split('<table class="lms-table', 1)[1].split('</table>', 1)[0]
+        table_header, table_body = first_table.split('</thead>', 1)
+        self.assertEqual(table_header.split('<tr>', 1)[1].count('<th'), 4)
+        self.assertIn('Đợt 1', table_header)
+        self.assertNotIn('Đợt 2', table_header)
+        self.assertEqual(table_body.split('</tr>', 1)[0].count('<td'), 4)
         self.assertEqual(preview.context['payment_count'], 2)
         self.assertEqual(preview.context['teacher_amount'], 160000)
         self.assertEqual(preview_export.status_code, 200)

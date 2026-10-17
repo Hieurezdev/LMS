@@ -96,7 +96,7 @@
           <tr>
             <th class="text-center" style="width:70px;">STT</th>
             <th>Học sinh</th>
-            {% for period in period_options %}<th class="text-center" style="min-width:125px;">{{ period.name }}</th>{% endfor %}
+            {% for number in selected_period_numbers %}<th class="text-center" style="min-width:125px;">Đợt {{ number }}</th>{% endfor %}
             <th class="text-end" style="min-width:145px;">Tổng đã đóng</th>
           </tr>
         </thead>
