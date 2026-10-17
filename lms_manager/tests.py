@@ -805,6 +805,10 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(workbook.sheetnames, [
             'Tất cả học sinh', 'Đã quyết toán', 'Chưa quyết toán',
         ])
+        for sheet in workbook:
+            for row in sheet.iter_rows():
+                for cell in row:
+                    self.assertIsNone(cell.fill.patternType)
         all_students = workbook['Tất cả học sinh']
         self.assertEqual(all_students['B5'].value, 3)
         self.assertEqual(all_students['C7'].value, 'Đợt 1')

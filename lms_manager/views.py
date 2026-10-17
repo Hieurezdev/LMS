@@ -2408,6 +2408,7 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
         return HttpResponse('Hãy chọn ít nhất một đợt để xuất Excel.', status=400)
 
     from openpyxl import Workbook
+    from openpyxl.styles import PatternFill
 
     payments = _teacher_class_payments(
         teacher, classroom, period_numbers
@@ -2491,10 +2492,13 @@ def teacher_class_settlement_students_export(request, teacher_id, classroom_id):
             ],
             fit_to_height=0,
         )
-    # This report has no formulas; treat formula-like user input as plain text.
+    # Keep the settlement report unfilled and treat formula-like input as text.
+    no_fill = PatternFill(fill_type=None)
     for sheet in workbook:
         for sheet_row in sheet:
             for cell in sheet_row:
+                if cell.fill.patternType is not None:
+                    cell.fill = no_fill
                 if cell.data_type == 'f':
                     cell.data_type = 's'
 
