@@ -63,16 +63,18 @@ class StudentForm(forms.ModelForm):
 
     class Meta:
         model = Student
-        fields = ['name', 'classroom', 'start_date']
+        fields = ['name', 'classroom', 'start_date', 'start_period']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Tên học sinh'}),
             'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'start_period': forms.Select(attrs={'class': 'form-control form-select'}),
         }
 
-    field_order = ['name', 'start_date', 'teacher', 'subject', 'classroom']
+    field_order = ['name', 'start_date', 'start_period', 'teacher', 'subject', 'classroom']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['start_period'].help_text = 'Các đợt trước đó sẽ không được tính là chưa đóng học phí.'
         if not self.instance.pk:
             # Creation mode
             self.fields['teacher'].required = True

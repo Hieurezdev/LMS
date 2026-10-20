@@ -76,6 +76,13 @@ def assign_teacher_to_classroom(teacher, classroom):
         )
 
 
+def eligible_enrollments_for_period(enrollments, period):
+    match = re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', period.name.strip(), re.IGNORECASE)
+    if match:
+        return enrollments.filter(student__start_period__lte=int(match.group(1)))
+    return enrollments
+
+
 def dashboard_view(request):
     # Overall Counts
     student_count = Student.objects.count()
@@ -119,10 +126,27 @@ def dashboard_view(request):
         .order_by('-payment_date')[:14]
     )
 
-    # Revenue by payment period
-    revenue_by_period = list(Payment.objects.values('payment_period__name')
-                            .annotate(total=Sum('amount'))
-                            .order_by('-total'))
+    # Group periods across teachers and keep empty periods visible.
+    period_revenue = {
+        number: {
+            'name': f'Đợt {number}',
+            'total': Decimal('0'),
+            'payment_count': 0,
+        }
+        for number in range(1, 9)
+    }
+    other_revenue = {'name': 'Đợt khác', 'total': Decimal('0'), 'payment_count': 0}
+    for item in Payment.objects.values('payment_period__name').annotate(
+        total=Sum('amount'), payment_count=Count('id')
+    ):
+        period_name = item['payment_period__name'] or ''
+        match = re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', period_name.strip(), re.IGNORECASE)
+        summary = period_revenue[int(match.group(1))] if match else other_revenue
+        summary['total'] += item['total']
+        summary['payment_count'] += item['payment_count']
+    revenue_by_period = list(period_revenue.values())
+    if other_revenue['payment_count']:
+        revenue_by_period.append(other_revenue)
 
     # Revenue by classroom
     revenue_by_class = list(Payment.objects.values('classroom__id', 'classroom__name')
@@ -175,7 +199,7 @@ def dashboard_view(request):
         ).exclude(
             student__payments__payment_period=period
         )
-        debt_total_count += unpaid.count()
+        debt_total_count += eligible_enrollments_for_period(unpaid, period).count()
 
     # Tính học sinh nợ từ 2 đợt trở lên
     overdue_students = []
@@ -185,7 +209,7 @@ def dashboard_view(request):
         if not s.start_date:
             continue
         unpaid_overdue = []
-        for i in range(1, 9):
+        for i in range(s.start_period, 9):
             status = getattr(s, f"dot_{i}")
             if status == 'Chưa đóng':
                 deadline = add_months(s.start_date, i)
@@ -302,6 +326,7 @@ def debt_dashboard(request):
         ).exclude(
             student__payments__payment_period=period
         ).select_related('student', 'student__classroom').order_by('student__classroom__name', 'student__name')
+        enrollments = eligible_enrollments_for_period(enrollments, period)
 
         unpaid_records = []
         for e in enrollments:
@@ -382,7 +407,7 @@ def cashier_due_list(request):
         ).exclude(student__payments__payment_period=period).select_related(
             'student', 'student__classroom'
         ).order_by('student__classroom__name', 'student__name')
-        records = list(enrollments)
+        records = list(eligible_enrollments_for_period(enrollments, period))
         if not records:
             continue
         total_unpaid += len(records)
@@ -1130,6 +1155,13 @@ def unique_excel_sheet_name(classroom_name, used_names):
     return candidate
 
 
+def student_period_excel_value(student, period):
+    amount = getattr(student, f'payment_amount_{period}')
+    if amount:
+        return amount
+    return 'Không áp dụng' if period < student.start_period else 'Chưa đóng'
+
+
 def student_list_export(request):
     search_name = request.GET.get('name', '').strip()
     classroom_id = request.GET.get('classroom_id', '').strip()
@@ -1146,7 +1178,7 @@ def student_list_export(request):
         rows.append([
             index, student.name, student.classroom.name if student.classroom else '',
             student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
-            *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+            *[student_period_excel_value(student, period) for period in range(1, 9)],
         ])
     return formatted_excel_response(
         'DANH SÁCH HỌC SINH',
@@ -1195,6 +1227,7 @@ def classroom_export(request, pk):
         students = [
             student for student in students
             if bool(getattr(student, attribute_name)) == (status == 'paid')
+            and (status == 'paid' or student.start_period <= int(period_number))
         ]
     students = sort_students_for_lists(students)
     subject_by_student = {}
@@ -1208,7 +1241,7 @@ def classroom_export(request, pk):
         rows.append([
             index, student.name, ', '.join(subject_by_student.get(student.id, [])),
             student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
-            *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+            *[student_period_excel_value(student, period) for period in range(1, 9)],
         ])
     details = [('Lớp', classroom.name)]
     if teacher:
@@ -1262,7 +1295,7 @@ def teacher_classes_export(request, pk):
                 rows.append([
                     index, student.name, enrollment.subject.name,
                     student.start_date.strftime('%d/%m/%Y') if student.start_date else '',
-                    *[getattr(student, f'payment_amount_{period}') or 'Chưa đóng' for period in range(1, 9)],
+                    *[student_period_excel_value(student, period) for period in range(1, 9)],
                 ])
 
         format_excel_sheet(
@@ -1536,6 +1569,8 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
 
         if not period_nums or any(period_num not in range(1, 9) for period_num in period_nums) or amount <= 0:
             raise ValueError(f'Khoản thu dòng {index} không hợp lệ.')
+        if any(period_num < student.start_period for period_num in period_nums):
+            raise ValueError(f'Học sinh {student.name} bắt đầu thu học phí từ Đợt {student.start_period}.')
         if not student.classroom:
             raise ValueError(f'Học sinh {student.name} chưa được xếp lớp.')
 
@@ -1631,7 +1666,7 @@ def payment_student_search(request):
             for payment in student.payments.all()
             if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
         }
-        unpaid_periods = [number for number in range(1, 9) if number not in paid_periods]
+        unpaid_periods = [number for number in range(student.start_period, 9) if number not in paid_periods]
         if not unpaid_periods:
             continue
         results.append({
@@ -1772,6 +1807,10 @@ def payment_create(request):
                     if str(i) in period_name:
                         period_num = i
                         break
+
+            if period_num is not None and period_num < student.start_period:
+                form.add_error('payment_period', f'Học sinh bắt đầu thu học phí từ Đợt {student.start_period}.')
+                return render(request, 'lms_manager/payment_create.html', {'form': form}, status=400)
             
             # Find or create PaymentPeriod
             period_obj, _ = PaymentPeriod.objects.get_or_create(
@@ -2297,6 +2336,7 @@ def _settlement_student_rows(payments, period_numbers=None):
     for payment in payments:
         row = rows.setdefault(payment.student_id, {
             'student_name': payment.student.name,
+            'start_period': payment.student.start_period,
             'period_names': [],
             'amounts_by_period_number': {},
             'settled_amounts_by_period_number': {},
@@ -2328,6 +2368,8 @@ def _settlement_student_rows(payments, period_numbers=None):
                     row['period_states'].append({'status': 'unsettled', 'amount': amount})
                 elif amount := row['settled_amounts_by_period_number'].get(period_number):
                     row['period_states'].append({'status': 'settled', 'amount': amount})
+                elif period_number < row['start_period']:
+                    row['period_states'].append({'status': 'not_applicable', 'amount': None})
                 else:
                     row['period_states'].append({'status': 'unpaid', 'amount': None})
     return ordered_rows
@@ -2597,7 +2639,11 @@ def _add_teacher_class_settlement_sheets(workbook, teacher, classroom, period_nu
         key=lambda student: (*given_name_sort_key(student.name), student.pk),
     )
     paid_student_count = len({payment.student_id for payment in payments})
-    unpaid_student_count = len(all_students) - paid_student_count
+    paid_student_ids = {payment.student_id for payment in payments}
+    unpaid_student_count = sum(
+        student.pk not in paid_student_ids and any(number >= student.start_period for number in period_numbers)
+        for student in all_students
+    )
     period_label = ', '.join(str(number) for number in period_numbers)
     report_details = [
         ('Lớp', classroom.name),
@@ -2618,7 +2664,12 @@ def _add_teacher_class_settlement_sheets(workbook, teacher, classroom, period_nu
     )
     for index, (student, teacher_amount) in enumerate(zip(all_students, all_student_amounts), start=1):
         period_statuses = [
-            (number, status_labels[frozenset(statuses_by_student_period[(student.pk, number)])])
+            (
+                number,
+                'Không áp dụng' if number < student.start_period
+                and not statuses_by_student_period[(student.pk, number)]
+                else status_labels[frozenset(statuses_by_student_period[(student.pk, number)])],
+            )
             for number in period_numbers
         ]
         period_descriptions = [
@@ -2708,7 +2759,10 @@ def _fill_teacher_settlement_sheet(sheet, settlement):
     })
     period_label = ', '.join(str(number) for number in period_numbers) or 'khác'
     paid_student_count = len({payment.student_id for payment in payments})
-    unpaid_student_count = max(settlement.classroom.students.count() - paid_student_count, 0)
+    eligible_students = settlement.classroom.students.all()
+    if period_numbers:
+        eligible_students = eligible_students.filter(start_period__lte=max(period_numbers))
+    unpaid_student_count = max(eligible_students.count() - paid_student_count, 0)
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = 'A7'
     sheet.merge_cells('A1:E1')
@@ -2896,6 +2950,8 @@ def student_detail(request, pk):
             subject=period.subject,
             payment_period=period
         ).first()
+        if not payment and (number := _payment_period_number(period)) and number < student.start_period:
+            continue
         
         if payment:
             status = "Đã đóng"
@@ -3184,7 +3240,7 @@ def get_student_teachers(request, student_id):
 def get_student_unpaid_periods(request, student_id):
     student = get_object_or_404(Student, pk=student_id)
     unpaid = []
-    for i in range(1, 9):
+    for i in range(student.start_period, 9):
         status = getattr(student, f"dot_{i}")
         if status == 'Chưa đóng':
             unpaid.append({

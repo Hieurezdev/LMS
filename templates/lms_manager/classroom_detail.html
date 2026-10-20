@@ -188,6 +188,7 @@
                     <tbody>
                         {% for s in report.students %}
                         <tr class="classroom-student-row"
+                            data-start-period="{{ s.start_period }}"
                             data-paid-1="{% if s.payment_amount_1 %}1{% else %}0{% endif %}"
                             data-paid-2="{% if s.payment_amount_2 %}1{% else %}0{% endif %}"
                             data-paid-3="{% if s.payment_amount_3 %}1{% else %}0{% endif %}"
@@ -208,28 +209,28 @@
                             
                             <!-- Đợt 1 -> 8 Status Toggles -->
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_1 student_id=s.id period_num=1 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_1 student_id=s.id period_num=1 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_2 student_id=s.id period_num=2 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_2 student_id=s.id period_num=2 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_3 student_id=s.id period_num=3 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_3 student_id=s.id period_num=3 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_4 student_id=s.id period_num=4 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_4 student_id=s.id period_num=4 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_5 student_id=s.id period_num=5 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_5 student_id=s.id period_num=5 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_6 student_id=s.id period_num=6 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_6 student_id=s.id period_num=6 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_7 student_id=s.id period_num=7 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_7 student_id=s.id period_num=7 start_period=s.start_period %}
                             </td>
                             <td class="text-center">
-                                {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_8 student_id=s.id period_num=8 %}
+                      {% include 'snippets/payment_period_amount_badge.html' with amount=s.payment_amount_8 student_id=s.id period_num=8 start_period=s.start_period %}
                             </td>
                             
                             <td class="text-center no-export">
@@ -337,8 +338,9 @@
                 const [status, period] = this.value.split('-');
                 table.querySelectorAll('.classroom-student-row').forEach(row => {
                     const isPaid = row.getAttribute(`data-paid-${period}`) === '1';
+                    const isApplicable = Number(period) >= Number(row.dataset.startPeriod);
                     row.style.display = status === 'all' || (status === 'paid' && isPaid) ||
-                        (status === 'unpaid' && !isPaid) ? '' : 'none';
+                        (status === 'unpaid' && !isPaid && isApplicable) ? '' : 'none';
                 });
                 if (exportLink) {
                     const exportUrl = new URL(exportLink.href, window.location.origin);

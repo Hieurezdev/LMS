@@ -115,6 +115,11 @@ class Student(models.Model):
     name = models.CharField(max_length=150, verbose_name="Tên học sinh")
     classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="students", null=True, blank=True, verbose_name="Lớp")
     start_date = models.DateField(blank=True, null=True, verbose_name="Ngày bắt đầu học")
+    start_period = models.PositiveSmallIntegerField(
+        choices=[(number, f'Đợt {number}') for number in range(1, 9)],
+        default=1,
+        verbose_name="Bắt đầu thu học phí từ đợt",
+    )
     
     dot_1 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 1")
     dot_2 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 2")

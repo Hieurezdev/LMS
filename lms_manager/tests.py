@@ -70,6 +70,81 @@ class LMSManagerQueryTest(TestCase):
         self.assertEqual(unpaid.count(), 1)
         self.assertEqual(unpaid.first().student, self.student2)
 
+    def test_student_start_period_excludes_earlier_tuition(self):
+        from lms_manager.forms import StudentForm
+        from lms_manager.views import _create_batch_payments, _settlement_student_rows
+
+        form = StudentForm(data={
+            'name': 'New Student', 'classroom': self.classroom.pk,
+            'teacher': self.teacher.pk, 'subject': self.subject.pk,
+            'start_period': '2',
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+        student = form.save()
+        Enrollment.objects.create(student=student, subject=self.subject, teacher=self.teacher)
+        PaymentPeriod.objects.create(name='Period 2', teacher=self.teacher, subject=self.subject)
+        self.assertEqual(student.start_period, 2)
+        self.assertEqual(self.student1.start_period, 1)
+
+        with translation.override('en'):
+            create_page = self.client.get(reverse('student_add'))
+            dashboard = self.client.get(reverse('home'))
+            search = self.client.post(reverse('payment_student_search'), {'query': 'New Student'})
+            debt = self.client.get(reverse('debt_dashboard'))
+            cashier = self.client.get(reverse('cashier_due_list'))
+            detail = self.client.get(reverse('student_detail', args=[student.pk]))
+            unpaid = self.client.get(reverse('api_student_unpaid_periods', args=[student.pk]))
+            listing = self.client.get(reverse('student_list'))
+            exported = self.client.get(reverse('student_list_export'))
+            unpaid_export = self.client.get(
+                reverse('classroom_export', args=[self.classroom.pk]),
+                {'payment_filter': 'unpaid-1'},
+            )
+
+        self.assertEqual(search.json()['students'][0]['unpaidPeriods'], list(range(2, 9)))
+        self.assertContains(create_page, 'name="start_period"')
+        self.assertEqual(dashboard.context['debt_total_count'], 4)
+        self.assertEqual(
+            [report['period'].name for report in debt.context['period_reports']
+             if any(record['student'] == student for record in report['records'])],
+            ['Period 2'],
+        )
+        self.assertEqual(
+            [report['period'].name for report in cashier.context['reports']
+             if any(record.student == student for record in report['records'])],
+            ['Period 2'],
+        )
+        self.assertEqual([record['period'].name for record in detail.context['records']], ['Period 2'])
+        self.assertEqual([period['id'] for period in unpaid.json()['periods']], list(range(2, 9)))
+        self.assertContains(listing, 'Không áp dụng')
+        from openpyxl import load_workbook
+        sheet = load_workbook(io.BytesIO(exported.content), read_only=True).active
+        exported_student = next(row for row in sheet.iter_rows(values_only=True) if 'New Student' in row)
+        self.assertEqual(exported_student[4:6], ('Không áp dụng', 'Chưa đóng'))
+        unpaid_sheet = load_workbook(io.BytesIO(unpaid_export.content), read_only=True).active
+        self.assertFalse(any('New Student' in row for row in unpaid_sheet.iter_rows(values_only=True)))
+
+        with self.assertRaisesMessage(ValueError, 'bắt đầu thu học phí từ Đợt 2'):
+            _create_batch_payments([{
+                'student_id': student.pk, 'teacher_id': self.teacher.pk,
+                'period_nums': [1], 'amount': '100000',
+            }], timezone.localdate())
+
+        Payment.objects.create(
+            student=student, classroom=self.classroom, subject=self.subject,
+            teacher=self.teacher,
+            payment_period=PaymentPeriod.objects.get(name='Period 2'),
+            amount=100000,
+        )
+        settlement_rows = _settlement_student_rows(
+            Payment.objects.filter(student=student).select_related('student', 'payment_period'),
+            [1, 2],
+        )
+        self.assertEqual(
+            [state['status'] for state in settlement_rows[0]['period_states']],
+            ['not_applicable', 'unsettled'],
+        )
+
     def test_dashboard_student_name_totals_and_cross_class_duplicates(self):
         other_classroom = ClassRoom.objects.create(name='10A2')
         Student.objects.create(name='John Doe', classroom=other_classroom)
@@ -83,6 +158,35 @@ class LMSManagerQueryTest(TestCase):
             response.context['duplicate_student_names'],
             [{'name': 'John Doe', 'count': 2, 'classrooms': ['10A1', '10A2']}],
         )
+
+    def test_dashboard_revenue_groups_payments_by_period_and_shows_empty_periods(self):
+        for name, amount in [('Đợt 1', 50000), ('Đợt 3', 25000), ('Học phí bổ sung', 10000)]:
+            period = PaymentPeriod.objects.create(
+                name=name, teacher=self.teacher, subject=self.subject,
+            )
+            Payment.objects.create(
+                student=self.student2, classroom=self.classroom, subject=self.subject,
+                teacher=self.teacher, payment_period=period, amount=amount,
+            )
+
+        with translation.override('en'):
+            response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [(item['name'], item['total'], item['payment_count'])
+             for item in response.context['revenue_by_period']],
+            [
+                ('Đợt 1', 150000, 2),
+                ('Đợt 2', 0, 0),
+                ('Đợt 3', 25000, 1),
+                *[(f'Đợt {number}', 0, 0) for number in range(4, 9)],
+                ('Đợt khác', 10000, 1),
+            ],
+        )
+        self.assertEqual(response.context['total_revenue'], 185000)
+        self.assertContains(response, 'Doanh thu theo đợt')
+        self.assertNotContains(response, 'id="periodChart"')
 
     def test_cashier_can_collect_and_view_unpaid_but_cannot_access_admin_lists(self):
         cashier = get_user_model().objects.create_user(
