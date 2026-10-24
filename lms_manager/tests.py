@@ -114,17 +114,20 @@ class LMSManagerQueryTest(TestCase):
              if any(record.student == student for record in report['records'])],
             ['Period 2'],
         )
-        self.assertEqual([record['period'].name for record in detail.context['records']], ['Period 2'])
+        self.assertEqual(
+            [(record['period'].name, record['status']) for record in detail.context['records']],
+            [('Period 1', 'Không học'), ('Period 2', 'Chưa đóng')],
+        )
         self.assertEqual([period['id'] for period in unpaid.json()['periods']], list(range(2, 9)))
-        self.assertContains(listing, 'Không áp dụng')
+        self.assertContains(listing, 'Không học')
         from openpyxl import load_workbook
         sheet = load_workbook(io.BytesIO(exported.content), read_only=True).active
         exported_student = next(row for row in sheet.iter_rows(values_only=True) if 'New Student' in row)
-        self.assertEqual(exported_student[4:6], ('Không áp dụng', 'Chưa đóng'))
+        self.assertEqual(exported_student[4:6], ('Không học', 'Chưa đóng'))
         unpaid_sheet = load_workbook(io.BytesIO(unpaid_export.content), read_only=True).active
         self.assertFalse(any('New Student' in row for row in unpaid_sheet.iter_rows(values_only=True)))
 
-        with self.assertRaisesMessage(ValueError, 'bắt đầu thu học phí từ Đợt 2'):
+        with self.assertRaisesMessage(ValueError, 'không học một trong các đợt thu đã chọn'):
             _create_batch_payments([{
                 'student_id': student.pk, 'teacher_id': self.teacher.pk,
                 'period_nums': [1], 'amount': '100000',
@@ -144,6 +147,85 @@ class LMSManagerQueryTest(TestCase):
             [state['status'] for state in settlement_rows[0]['period_states']],
             ['not_applicable', 'unsettled'],
         )
+
+    def test_study_period_checkboxes_save_per_student_and_control_tuition(self):
+        with translation.override('en'):
+            url = reverse('student_study_periods_update', args=[self.student2.pk])
+            self.assertEqual(self.client.get(url).status_code, 405)
+            response = self.client.post(url, {'study_periods': ['2', '4', '5', '6', '7', '8']})
+            detail = self.client.get(reverse('student_detail', args=[self.student2.pk]))
+            debt = self.client.get(reverse('debt_dashboard'))
+            search = self.client.post(reverse('payment_student_search'), {'query': self.student2.name})
+            exported = self.client.get(reverse('student_list_export'))
+        self.assertEqual(response.status_code, 302)
+        self.student2.refresh_from_db()
+        self.assertFalse(self.student2.studies_in_period(1))
+        self.assertTrue(self.student2.studies_in_period(2))
+        self.assertFalse(self.student2.studies_in_period(3))
+        self.assertEqual(detail.context['records'][0]['status'], 'Không học')
+        self.assertContains(detail, 'Lưu trạng thái học')
+        self.assertEqual(detail.content.decode().count('name="study_periods"'), 8)
+        self.assertNotIn(
+            self.student2,
+            [record['student'] for report in debt.context['period_reports'] for record in report['records']],
+        )
+        self.assertEqual(
+            search.json()['students'][0]['unpaidPeriods'], [2, 4, 5, 6, 7, 8],
+        )
+        from openpyxl import load_workbook
+        sheet = load_workbook(io.BytesIO(exported.content), read_only=True).active
+        student_row = next(row for row in sheet.iter_rows(values_only=True) if self.student2.name in row)
+        self.assertEqual(student_row[4:7], ('Không học', 'Chưa đóng', 'Không học'))
+
+        with translation.override('en'):
+            self.client.post(url, {'study_periods': ['1', '2', '4', '5', '6', '7', '8']})
+            restored_debt = self.client.get(reverse('debt_dashboard'))
+        self.student2.refresh_from_db()
+        self.assertTrue(self.student2.studies_in_period(1))
+        self.assertIn(
+            self.student2,
+            [record['student'] for report in restored_debt.context['period_reports'] for record in report['records']],
+        )
+
+        with translation.override('en'):
+            invalid = self.client.post(url, {'study_periods': ['9']})
+            paid_url = reverse('student_study_periods_update', args=[self.student1.pk])
+            paid_period_rejected = self.client.post(
+                paid_url, {'study_periods': [str(number) for number in range(2, 9)]},
+            )
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(paid_period_rejected.status_code, 302)
+        self.student1.refresh_from_db()
+        self.assertTrue(self.student1.studies_in_period(1))
+        self.assertEqual(self.student1.attends_period_1, None)
+
+    def test_study_period_update_requires_admin_and_csrf(self):
+        with translation.override('en'):
+            url = reverse('student_study_periods_update', args=[self.student2.pk])
+            csrf_client = Client(enforce_csrf_checks=True)
+            csrf_client.force_login(self.admin_user)
+            self.assertEqual(csrf_client.post(url, {'study_periods': ['2']}).status_code, 403)
+
+            cashier = get_user_model().objects.create_user(
+                username='period-cashier', password='safe-test-password', role='cashier',
+            )
+            self.client.force_login(cashier)
+            self.assertEqual(self.client.post(url, {'study_periods': ['2']}).status_code, 403)
+        self.student2.refresh_from_db()
+        self.assertIsNone(self.student2.attends_period_1)
+
+    def test_editing_start_period_preserves_paid_period_as_studying(self):
+        with translation.override('en'):
+            response = self.client.post(reverse('student_edit', args=[self.student1.pk]), {
+                'name': self.student1.name,
+                'classroom': self.classroom.pk,
+                'start_period': '2',
+            })
+        self.assertEqual(response.status_code, 302)
+        self.student1.refresh_from_db()
+        self.assertEqual(self.student1.start_period, 2)
+        self.assertTrue(self.student1.attends_period_1)
+        self.assertTrue(self.student1.studies_in_period(1))
 
     def test_dashboard_student_name_totals_and_cross_class_duplicates(self):
         other_classroom = ClassRoom.objects.create(name='10A2')

@@ -74,7 +74,7 @@ class StudentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['start_period'].help_text = 'Các đợt trước đó sẽ không được tính là chưa đóng học phí.'
+        self.fields['start_period'].help_text = 'Các đợt trước đó mặc định là Không học; có thể chỉnh riêng trên trang chi tiết học sinh.'
         if not self.instance.pk:
             # Creation mode
             self.fields['teacher'].required = True

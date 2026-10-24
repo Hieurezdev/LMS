@@ -79,7 +79,12 @@ def assign_teacher_to_classroom(teacher, classroom):
 def eligible_enrollments_for_period(enrollments, period):
     match = re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', period.name.strip(), re.IGNORECASE)
     if match:
-        return enrollments.filter(student__start_period__lte=int(match.group(1)))
+        number = int(match.group(1))
+        override_field = f'student__attends_period_{number}'
+        return enrollments.filter(
+            Q(**{override_field: True})
+            | Q(**{f'{override_field}__isnull': True, 'student__start_period__lte': number})
+        )
     return enrollments
 
 
@@ -209,7 +214,9 @@ def dashboard_view(request):
         if not s.start_date:
             continue
         unpaid_overdue = []
-        for i in range(s.start_period, 9):
+        for i in range(1, 9):
+            if not s.studies_in_period(i):
+                continue
             status = getattr(s, f"dot_{i}")
             if status == 'Chưa đóng':
                 deadline = add_months(s.start_date, i)
@@ -1016,6 +1023,7 @@ def attach_payment_period_amounts(students, teacher=None):
                 amounts[period_num] += payment.amount
         for period_num, amount in amounts.items():
             setattr(student, f'payment_amount_{period_num}', amount or None)
+            setattr(student, f'studies_period_{period_num}', student.studies_in_period(period_num))
 
 
 def sort_students_for_lists(students):
@@ -1159,7 +1167,7 @@ def student_period_excel_value(student, period):
     amount = getattr(student, f'payment_amount_{period}')
     if amount:
         return amount
-    return 'Không áp dụng' if period < student.start_period else 'Chưa đóng'
+    return 'Chưa đóng' if student.studies_in_period(period) else 'Không học'
 
 
 def student_list_export(request):
@@ -1227,7 +1235,7 @@ def classroom_export(request, pk):
         students = [
             student for student in students
             if bool(getattr(student, attribute_name)) == (status == 'paid')
-            and (status == 'paid' or student.start_period <= int(period_number))
+            and (status == 'paid' or student.studies_in_period(int(period_number)))
         ]
     students = sort_students_for_lists(students)
     subject_by_student = {}
@@ -1393,7 +1401,12 @@ def student_update(request, pk):
     if request.method == 'POST':
         form = StudentForm(request.POST, instance=student)
         if form.is_valid():
-            form.save()
+            updated_student = form.save(commit=False)
+            for name in student.payments.values_list('payment_period__name', flat=True):
+                match = re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', name.strip(), re.IGNORECASE)
+                if match and not updated_student.studies_in_period(int(match.group(1))):
+                    setattr(updated_student, f'attends_period_{match.group(1)}', True)
+            updated_student.save()
             messages.success(request, "Đã cập nhật học sinh thành công!")
             return redirect('student_detail', pk=student.id)
     else:
@@ -1569,8 +1582,8 @@ def _create_batch_payments(items, payment_date, payment_method='cash', created_b
 
         if not period_nums or any(period_num not in range(1, 9) for period_num in period_nums) or amount <= 0:
             raise ValueError(f'Khoản thu dòng {index} không hợp lệ.')
-        if any(period_num < student.start_period for period_num in period_nums):
-            raise ValueError(f'Học sinh {student.name} bắt đầu thu học phí từ Đợt {student.start_period}.')
+        if any(not student.studies_in_period(period_num) for period_num in period_nums):
+            raise ValueError(f'Học sinh {student.name} không học một trong các đợt thu đã chọn.')
         if not student.classroom:
             raise ValueError(f'Học sinh {student.name} chưa được xếp lớp.')
 
@@ -1666,7 +1679,10 @@ def payment_student_search(request):
             for payment in student.payments.all()
             if (match := re.fullmatch(r'Đợt\s+([1-8])', payment.payment_period.name.strip()))
         }
-        unpaid_periods = [number for number in range(student.start_period, 9) if number not in paid_periods]
+        unpaid_periods = [
+            number for number in range(1, 9)
+            if student.studies_in_period(number) and number not in paid_periods
+        ]
         if not unpaid_periods:
             continue
         results.append({
@@ -1780,6 +1796,17 @@ def payment_create(request):
                 created = True
             else:
                 classroom = student.classroom
+
+            period_val = form.cleaned_data.get('payment_period', '').strip()
+            if period_val.isdigit():
+                period_num = int(period_val)
+                period_name = f"Đợt {period_val}"
+            else:
+                period_name = period_val
+                period_num = next((i for i in range(1, 9) if str(i) in period_name), None)
+            if period_num in range(1, 9) and not student.studies_in_period(period_num):
+                form.add_error('payment_period', f'Học sinh không học Đợt {period_num}.')
+                return render(request, 'lms_manager/payment_create.html', {'form': form}, status=400)
             
             # Resolve subject from teacher
             enrollment = Enrollment.objects.filter(student=student, teacher=teacher).first()
@@ -1793,24 +1820,6 @@ def payment_create(request):
                     subject=subject,
                     defaults={'teacher': teacher}
                 )
-            
-            # Parse the period name or index
-            period_val = form.cleaned_data.get('payment_period', '').strip()
-            if period_val.isdigit():
-                period_num = int(period_val)
-                period_name = f"Đợt {period_val}"
-            else:
-                period_name = period_val
-                # Try to extract number
-                period_num = None
-                for i in range(1, 9):
-                    if str(i) in period_name:
-                        period_num = i
-                        break
-
-            if period_num is not None and period_num < student.start_period:
-                form.add_error('payment_period', f'Học sinh bắt đầu thu học phí từ Đợt {student.start_period}.')
-                return render(request, 'lms_manager/payment_create.html', {'form': form}, status=400)
             
             # Find or create PaymentPeriod
             period_obj, _ = PaymentPeriod.objects.get_or_create(
@@ -1930,6 +1939,21 @@ def payment_edit(request, pk):
                 student = old_student
                 
             teacher = form.cleaned_data.get('teacher')
+
+            period_val = form.cleaned_data.get('payment_period', '').strip()
+            if period_val.isdigit():
+                period_num = int(period_val)
+                period_name = f"Đợt {period_val}"
+            else:
+                period_name = period_val
+                period_num = next((i for i in range(1, 9) if str(i) in period_name), None)
+            if period_num in range(1, 9) and not student.studies_in_period(period_num):
+                form.add_error('payment_period', f'Học sinh không học Đợt {period_num}.')
+                return render(request, 'lms_manager/payment_edit_form.html', {
+                    'form': form,
+                    'payment': payment,
+                    'existing_students': Student.objects.order_by('name'),
+                }, status=400)
             
             enrollment = Enrollment.objects.filter(student=student, teacher=teacher).first()
             if enrollment:
@@ -1942,18 +1966,6 @@ def payment_edit(request, pk):
                     defaults={'teacher': teacher}
                 )
                 
-            period_val = form.cleaned_data.get('payment_period', '').strip()
-            if period_val.isdigit():
-                period_num = int(period_val)
-                period_name = f"Đợt {period_val}"
-            else:
-                period_name = period_val
-                period_num = None
-                for i in range(1, 9):
-                    if str(i) in period_name:
-                        period_num = i
-                        break
-                        
             period_obj, _ = PaymentPeriod.objects.get_or_create(
                 name=period_name,
                 teacher=teacher,
@@ -2336,7 +2348,7 @@ def _settlement_student_rows(payments, period_numbers=None):
     for payment in payments:
         row = rows.setdefault(payment.student_id, {
             'student_name': payment.student.name,
-            'start_period': payment.student.start_period,
+            'student': payment.student,
             'period_names': [],
             'amounts_by_period_number': {},
             'settled_amounts_by_period_number': {},
@@ -2368,7 +2380,7 @@ def _settlement_student_rows(payments, period_numbers=None):
                     row['period_states'].append({'status': 'unsettled', 'amount': amount})
                 elif amount := row['settled_amounts_by_period_number'].get(period_number):
                     row['period_states'].append({'status': 'settled', 'amount': amount})
-                elif period_number < row['start_period']:
+                elif not row['student'].studies_in_period(period_number):
                     row['period_states'].append({'status': 'not_applicable', 'amount': None})
                 else:
                     row['period_states'].append({'status': 'unpaid', 'amount': None})
@@ -2641,7 +2653,7 @@ def _add_teacher_class_settlement_sheets(workbook, teacher, classroom, period_nu
     paid_student_count = len({payment.student_id for payment in payments})
     paid_student_ids = {payment.student_id for payment in payments}
     unpaid_student_count = sum(
-        student.pk not in paid_student_ids and any(number >= student.start_period for number in period_numbers)
+        student.pk not in paid_student_ids and any(student.studies_in_period(number) for number in period_numbers)
         for student in all_students
     )
     period_label = ', '.join(str(number) for number in period_numbers)
@@ -2666,7 +2678,7 @@ def _add_teacher_class_settlement_sheets(workbook, teacher, classroom, period_nu
         period_statuses = [
             (
                 number,
-                'Không áp dụng' if number < student.start_period
+                'Không học' if not student.studies_in_period(number)
                 and not statuses_by_student_period[(student.pk, number)]
                 else status_labels[frozenset(statuses_by_student_period[(student.pk, number)])],
             )
@@ -2759,10 +2771,12 @@ def _fill_teacher_settlement_sheet(sheet, settlement):
     })
     period_label = ', '.join(str(number) for number in period_numbers) or 'khác'
     paid_student_count = len({payment.student_id for payment in payments})
-    eligible_students = settlement.classroom.students.all()
-    if period_numbers:
-        eligible_students = eligible_students.filter(start_period__lte=max(period_numbers))
-    unpaid_student_count = max(eligible_students.count() - paid_student_count, 0)
+    paid_student_ids = {payment.student_id for payment in payments}
+    unpaid_student_count = sum(
+        student.pk not in paid_student_ids
+        and (not period_numbers or any(student.studies_in_period(number) for number in period_numbers))
+        for student in settlement.classroom.students.all()
+    )
     sheet.sheet_view.showGridLines = False
     sheet.freeze_panes = 'A7'
     sheet.merge_cells('A1:E1')
@@ -2917,6 +2931,37 @@ def classroom_detail(request, pk):
 
 
 
+@require_POST
+def student_study_periods_update(request, pk):
+    selected_values = request.POST.getlist('study_periods')
+    if any(value not in {str(number) for number in range(1, 9)} for value in selected_values):
+        return HttpResponse('Đợt học không hợp lệ.', status=400)
+    selected_periods = {int(value) for value in selected_values}
+    with transaction.atomic():
+        student = get_object_or_404(Student.objects.select_for_update(), pk=pk)
+        paid_periods = {
+            int(match.group(1))
+            for name in student.payments.values_list('payment_period__name', flat=True)
+            if (match := re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', name.strip(), re.IGNORECASE))
+        }
+        if paid_periods - selected_periods:
+            messages.error(request, 'Không thể đánh dấu Không học cho đợt đã có giao dịch. Hãy hủy giao dịch trước.')
+            return redirect('student_detail', pk=pk)
+        update_fields = []
+        for number in range(1, 9):
+            field = f'attends_period_{number}'
+            studying = number in selected_periods
+            default = number >= student.start_period
+            override = None if studying == default else studying
+            if getattr(student, field) != override:
+                setattr(student, field, override)
+                update_fields.append(field)
+        if update_fields:
+            student.save(update_fields=update_fields)
+    messages.success(request, 'Đã lưu trạng thái học theo từng đợt.')
+    return redirect('student_detail', pk=pk)
+
+
 def student_detail(request, pk):
     student = get_object_or_404(Student, pk=pk)
     classroom = student.classroom
@@ -2941,6 +2986,15 @@ def student_detail(request, pk):
     # Build report for this student
     records = []
     total_paid = 0
+    paid_periods = {
+        int(match.group(1))
+        for name in student.payments.values_list('payment_period__name', flat=True)
+        if (match := re.fullmatch(r'(?:Đợt|Period)\s+([1-8])', name.strip(), re.IGNORECASE))
+    }
+    study_periods = [
+        {'number': number, 'studying': student.studies_in_period(number), 'paid': number in paid_periods}
+        for number in range(1, 9)
+    ]
     
     for period in payment_periods:
         # Find payment
@@ -2950,8 +3004,7 @@ def student_detail(request, pk):
             subject=period.subject,
             payment_period=period
         ).first()
-        if not payment and (number := _payment_period_number(period)) and number < student.start_period:
-            continue
+        number = _payment_period_number(period)
         
         if payment:
             status = "Đã đóng"
@@ -2960,7 +3013,7 @@ def student_detail(request, pk):
             payment_id = payment.id
             total_paid += amount
         else:
-            status = "Chưa đóng"
+            status = "Không học" if number and not student.studies_in_period(number) else "Chưa đóng"
             amount = 0
             date = None
             payment_id = None
@@ -2980,6 +3033,7 @@ def student_detail(request, pk):
         'enrollments': enrollments,
         'records': records,
         'total_paid': total_paid,
+        'study_periods': study_periods,
     })
 
 
@@ -3240,7 +3294,9 @@ def get_student_teachers(request, student_id):
 def get_student_unpaid_periods(request, student_id):
     student = get_object_or_404(Student, pk=student_id)
     unpaid = []
-    for i in range(student.start_period, 9):
+    for i in range(1, 9):
+        if not student.studies_in_period(i):
+            continue
         status = getattr(student, f"dot_{i}")
         if status == 'Chưa đóng':
             unpaid.append({

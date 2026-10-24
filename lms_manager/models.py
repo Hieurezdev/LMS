@@ -120,6 +120,14 @@ class Student(models.Model):
         default=1,
         verbose_name="Bắt đầu thu học phí từ đợt",
     )
+    attends_period_1 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_2 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_3 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_4 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_5 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_6 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_7 = models.BooleanField(null=True, blank=True, default=None)
+    attends_period_8 = models.BooleanField(null=True, blank=True, default=None)
     
     dot_1 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 1")
     dot_2 = models.CharField(max_length=20, default='Chưa đóng', choices=STATUS_CHOICES, verbose_name="Đợt 2")
@@ -137,6 +145,12 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.classroom.name})"
+
+    def studies_in_period(self, period_number: int) -> bool:
+        if period_number not in range(1, 9):
+            raise ValueError('Period number must be between 1 and 8.')
+        override = getattr(self, f'attends_period_{period_number}')
+        return override if override is not None else period_number >= self.start_period
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None

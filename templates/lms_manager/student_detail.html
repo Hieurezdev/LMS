@@ -7,6 +7,8 @@
 <style>
 .payment-row-paid { }
 .payment-row-unpaid { background: #FFFBEB !important; }
+.study-period-option { border:1px solid #E2E8F0; border-radius:10px; padding:10px 12px; cursor:pointer; }
+.study-period-option:has(input:checked) { background:#EEF1FE; border-color:#A5B4FC; }
 </style>
 {% endblock header %}
 
@@ -45,6 +47,33 @@
         <i class="fas fa-arrow-left"></i> Quay lại
       </a>
     </div>
+  </div>
+
+  {% for message in messages %}
+  <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}" role="alert">{{ message }}</div>
+  {% endfor %}
+
+  <div class="card p-3 mb-4">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-2">
+      <div>
+        <h2 class="h6 fw-bold mb-1">Học theo từng đợt</h2>
+        <p class="small text-secondary mb-0">Tick đợt có học rồi bấm lưu. Đợt không học sẽ không tính công nợ.</p>
+      </div>
+    </div>
+    <form method="post" action="{% url 'student_study_periods_update' student.id %}">
+      {% csrf_token %}
+      <div class="row row-cols-2 row-cols-sm-4 g-2 mb-3">
+        {% for period in study_periods %}
+        <div class="col">
+          <label class="study-period-option d-flex align-items-center gap-2 h-100" for="study-period-{{ period.number }}">
+            <input class="form-check-input mt-0" type="checkbox" name="study_periods" value="{{ period.number }}" id="study-period-{{ period.number }}" {% if period.studying %}checked{% endif %}>
+            <span>Đợt {{ period.number }}{% if period.paid %}<small class="d-block text-secondary">Đã thu phí</small>{% endif %}</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save me-1"></i>Lưu trạng thái học</button>
+    </form>
   </div>
 
   <div class="row g-4">
@@ -118,7 +147,7 @@
             </thead>
             <tbody>
               {% for r in records %}
-              <tr class="{% if r.status == 'Đã đóng' %}payment-row-paid{% else %}payment-row-unpaid{% endif %}">
+              <tr class="{% if r.status == 'Đã đóng' %}payment-row-paid{% elif r.status == 'Chưa đóng' %}payment-row-unpaid{% endif %}">
                 <td class="fw-semibold">{{ r.period.name }}</td>
                 <td style="color:#64748B;">{{ r.period.subject.name }}</td>
                 <td style="color:#64748B;">{{ r.period.teacher.name }}</td>
@@ -127,6 +156,8 @@
                     <span class="status-badge status-paid">
                       <i class="fas fa-check-circle"></i> Đã đóng
                     </span>
+                  {% elif r.status == "Không học" %}
+                    <span class="badge bg-light text-secondary border">Không học</span>
                   {% else %}
                     <span class="status-badge status-unpaid">
                       <i class="fas fa-clock"></i> Chưa đóng
@@ -161,10 +192,12 @@
                         </button>
                       </form>
                     </div>
-                  {% else %}
+                  {% elif r.status == "Chưa đóng" %}
                     <a href="{% url 'payment_add' %}?student={{ student.id }}&period={{ r.period.id }}" class="btn btn-success btn-xs">
                       <i class="fas fa-plus"></i> Thu phí
                     </a>
+                  {% else %}
+                    <span class="text-secondary">—</span>
                   {% endif %}
                 </td>
               </tr>

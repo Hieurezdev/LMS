@@ -53,6 +53,7 @@ urlpatterns = [
     path('students/add/', views.student_create, name='student_add'),
     path('students/delete-all/', views.student_delete_all, name='student_delete_all'),
     path('students/<int:pk>/', views.student_detail, name='student_detail'),
+    path('students/<int:pk>/study-periods/', views.student_study_periods_update, name='student_study_periods_update'),
     path('students/<int:pk>/export/', views.student_export, name='student_export'),
     path('students/<int:pk>/edit/', views.student_update, name='student_edit'),
     path('students/<int:pk>/delete/', views.student_delete, name='student_delete'),
